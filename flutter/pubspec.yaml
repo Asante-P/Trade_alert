@@ -1,0 +1,31 @@
+name: trade_alert
+description: TradingView Alert Notification App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  flutter_local_notifications: ^16.3.0
+  http: ^1.1.0
+  shared_preferences: ^2.2.2
+  intl: ^0.18.1
+  fl_chart: ^0.68.0
+  syncfusion_flutter_charts: ^26.1.38
+  webview_flutter: ^4.4.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/chart.html

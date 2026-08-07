@@ -1,0 +1,65 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── WEBHOOK ALERT CONFIGURATION ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Add these webhook alerts to your existing Pine Script
+// Replace YOUR_SERVER_URL with your actual server URL (e.g., ngrok URL)
+
+// ── BOS WEBHOOK ALERTS ───────────────────────────────────────────────────────
+if bullSignal and alertBull
+    alert("[BOS] Bullish Break of Structure @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+if bearSignal and alertBear
+    alert("[BOS] Bearish Break of Structure @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+// ── ZONE WEBHOOK ALERTS ───────────────────────────────────────────────────────
+if sd_buy and alertBull
+    alert("[ZONE] Demand Zone BUY @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+if sd_sell and alertBear
+    alert("[ZONE] Supply Zone SELL @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+// ── TRENDLINE WEBHOOK ALERTS ───────────────────────────────────────────────────
+if tlBuy3rd and alertBull
+    alert("[TRENDLINE] 3rd Touch BUY @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+if tlSell3rd and alertBear
+    alert("[TRENDLINE] 3rd Touch SELL @ " + str.tostring(close, format.mintick) +
+          " — " + syminfo.ticker + " " + timeframe.period, 
+          alert.freq_once_per_bar_close)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── TRADINGVIEW ALERT SETUP INSTRUCTIONS ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// 
+// 1. Click the "Alert" button on your TradingView chart
+// 2. Set Condition to one of the alert conditions from your script:
+//    - "Sweep BUY" for bullish BOS/sweep signals
+//    - "Sweep SELL" for bearish BOS/sweep signals
+//    - "S&D Zone BUY" for demand zone entries
+//    - "S&D Zone SELL" for supply zone entries
+//    - "3rd Touch Trendline BUY" for support trendline breaks
+//    - "3rd Touch Trendline SELL" for resistance trendline breaks
+//
+// 3. In the "Webhook URL" field, enter:
+//    https://YOUR_SERVER_URL/webhook
+//    (Replace YOUR_SERVER_URL with your ngrok URL or server domain)
+//
+// 4. In the "Message" field, enter this JSON format:
+//    {"type": "{{strategy.order.action}}", "price": {{close}}, "symbol": "{{ticker}}", "timeframe": "{{interval}}", "message": "{{strategy.order.comment}}"}
+//
+//    OR for custom alerts, use:
+//    {"type": "BOS", "price": {{close}}, "symbol": "{{ticker}}", "timeframe": "{{interval}}"}
+//
+// 5. Click "Create" to save the alert
+//
+// ═══════════════════════════════════════════════════════════════════════════════

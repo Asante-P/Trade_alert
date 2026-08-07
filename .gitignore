@@ -1,0 +1,37 @@
+# Flutter
+flutter/.dart_tool/
+flutter/.flutter-plugins
+flutter/.flutter-plugins-dependencies
+flutter/.packages
+flutter/build/
+flutter/.pub-cache/
+flutter/.pub/
+
+# Android
+flutter/android/.gradle/
+flutter/android/app/build/
+flutter/android/local.properties
+flutter/android/*.iml
+flutter/android/.idea/
+flutter/android/.externalNativeBuild
+
+# iOS
+flutter/ios/.symlinks/
+flutter/ios/Pods/
+flutter/ios/.generated/
+
+# Node
+backend/node_modules/
+backend/npm-debug.log
+backend/.env
+backend/firebase-service-account.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "254003260225",
+    "project_id": "trade-alert-d62fb",
+    "storage_bucket": "trade-alert-d62fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:254003260225:android:55672a2f9b4405e19d4fc0",
+        "android_client_info": {
+          "package_name": "com.example.trade_alert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbmwCCwd6IOMhk1JtjOvlaTi5PoTj5fR8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
