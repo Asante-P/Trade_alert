@@ -96,9 +96,15 @@ if (fs.existsSync(serviceAccountPath)) {
   console.log('Loaded Firebase credentials from environment variables');
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// Initialize Firebase only if credentials are available
+if (serviceAccount && serviceAccount.project_id) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log('Firebase initialized successfully');
+} else {
+  console.log('Firebase credentials incomplete - Firebase notifications will be disabled');
+}
 
 // Register FCM token
 app.post('/register-token', (req, res) => {
