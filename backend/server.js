@@ -825,6 +825,62 @@ app.get('/ml-prediction', async (req, res) => {
   }
 });
 
+// Trade Recommendation endpoint
+app.get('/trade-recommendation', async (req, res) => {
+  try {
+    const { symbol = 'XAUUSD' } = req.query;
+    
+    // Fetch market data
+    const marketData = await fetchMarketData(symbol, 100);
+    if (marketData.length === 0) {
+      return res.status(404).json({ success: false, message: 'No market data available' });
+    }
+    
+    // Get trade recommendation
+    const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData);
+    
+    res.json({
+      success: true,
+      symbol: symbol,
+      timestamp: new Date().toISOString(),
+      recommendation: recommendation
+    });
+  } catch (error) {
+    console.error('Trade recommendation error:', error);
+    res.status(500).json({ success: false, message: 'Trade recommendation failed' });
+  }
+});
+
+// Multi-symbol trade recommendations endpoint
+app.get('/trade-recommendations', async (req, res) => {
+  try {
+    const symbols = req.query.symbols ? req.query.symbols.split(',') : ['XAUUSD', 'EURUSD', 'BTCUSD', 'NAS100'];
+    
+    const recommendations = [];
+    
+    for (const symbol of symbols) {
+      try {
+        const marketData = await fetchMarketData(symbol, 100);
+        if (marketData.length > 0) {
+          const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData);
+          recommendations.push(recommendation);
+        }
+      } catch (error) {
+        console.error(`Error processing ${symbol}:`, error.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      recommendations: recommendations
+    });
+  } catch (error) {
+    console.error('Multi-symbol trade recommendations error:', error);
+    res.status(500).json({ success: false, message: 'Multi-symbol trade recommendations failed' });
+  }
+});
+
 // Generate trading signal based on market conditions
 function generateSignal(trend, priceChange, nearOBZone, obZoneCount) {
   if (nearOBZone && trend === 'bullish') return 'STRONG BUY';
@@ -834,6 +890,262 @@ function generateSignal(trend, priceChange, nearOBZone, obZoneCount) {
   if (obZoneCount > 0) return 'WATCH';
   return 'NEUTRAL';
 }
+
+// Advanced Trade Recommendation System
+class TradeRecommender {
+  constructor() {
+    this.rsiOversold = 30;
+    this.rsiOverbought = 70;
+    this.atrPeriod = 14;
+    this.supportResistancePeriod = 20;
+  }
+
+  calculateATR(data, period = 14) {
+    if (data.length < period + 1) return null;
+    
+    let tr = 0;
+    for (let i = 1; i < data.length; i++) {
+      const high = data[i].high;
+      const low = data[i].low;
+      const prevClose = data[i - 1].close;
+      const currentTR = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+      tr += currentTR;
+    }
+    
+    return tr / period;
+  }
+
+  findSupportResistance(data, period = 20) {
+    if (data.length < period) return { support: null, resistance: null };
+    
+    const recentData = data.slice(-period);
+    const highs = recentData.map(c => c.high);
+    const lows = recentData.map(c => c.low);
+    
+    const resistance = Math.max(...highs);
+    const support = Math.min(...lows);
+    
+    return { support, resistance };
+  }
+
+  calculatePivotPoints(data) {
+    const latest = data[data.length - 1];
+    const high = latest.high;
+    const low = latest.low;
+    const close = latest.close;
+    
+    const pivot = (high + low + close) / 3;
+    const r1 = (2 * pivot) - low;
+    const r2 = pivot + (high - low);
+    const s1 = (2 * pivot) - high;
+    const s2 = pivot - (high - low);
+    
+    return { pivot, r1, r2, s1, s2 };
+  }
+
+  analyzeMarketStructure(data) {
+    if (data.length < 5) return { trend: 'NEUTRAL', strength: 0 };
+    
+    const recent = data.slice(-20);
+    let higherHighs = 0;
+    let higherLows = 0;
+    let lowerHighs = 0;
+    let lowerLows = 0;
+    
+    for (let i = 1; i < recent.length; i++) {
+      if (recent[i].high > recent[i - 1].high) higherHighs++;
+      else lowerHighs++;
+      
+      if (recent[i].low > recent[i - 1].low) higherLows++;
+      else lowerLows++;
+    }
+    
+    const bullishScore = higherHighs + higherLows;
+    const bearishScore = lowerHighs + lowerLows;
+    
+    if (bullishScore > bearishScore * 1.5) return { trend: 'STRONG_BULLISH', strength: bullishScore / (recent.length - 1) };
+    if (bearishScore > bullishScore * 1.5) return { trend: 'STRONG_BEARISH', strength: bearishScore / (recent.length - 1) };
+    if (bullishScore > bearishScore) return { trend: 'BULLISH', strength: bullishScore / (recent.length - 1) };
+    if (bearishScore > bullishScore) return { trend: 'BEARISH', strength: bearishScore / (recent.length - 1) };
+    
+    return { trend: 'NEUTRAL', strength: 0.5 };
+  }
+
+  generateTradeRecommendation(symbol, marketData) {
+    if (marketData.length < 30) {
+      return {
+        symbol,
+        recommendation: 'HOLD',
+        confidence: 0,
+        reason: 'Insufficient data for analysis',
+        entryPrice: null,
+        stopLoss: null,
+        takeProfit: null,
+        orderType: 'NONE',
+        riskRewardRatio: 0
+      };
+    }
+
+    const currentPrice = marketData[marketData.length - 1].close;
+    const closes = marketData.map(c => c.close);
+    
+    // Calculate indicators
+    const rsi = this.calculateRSI(closes, 14);
+    const atr = this.calculateATR(marketData, 14);
+    const { support, resistance } = this.findSupportResistance(marketData, 20);
+    const { pivot, r1, r2, s1, s2 } = this.calculatePivotPoints(marketData);
+    const marketStructure = this.analyzeMarketStructure(marketData);
+    
+    // Calculate EMAs
+    const ema9 = this.calculateEMA(closes, 9);
+    const ema21 = this.calculateEMA(closes, 21);
+    const ema50 = this.calculateEMA(closes, 50);
+    
+    // Determine trend and momentum
+    const trend = ema9 > ema21 ? (ema21 > ema50 ? 'STRONG_BULLISH' : 'BULLISH') : 
+                 (ema21 < ema50 ? 'STRONG_BEARISH' : 'BEARISH');
+    
+    let recommendation = 'HOLD';
+    let orderType = 'NONE';
+    let entryPrice = currentPrice;
+    let stopLoss = null;
+    let takeProfit = null;
+    let confidence = 0;
+    let reason = '';
+    
+    // Advanced analysis logic
+    const isOversold = rsi < this.rsiOversold;
+    const isOverbought = rsi > this.rsiOverbought;
+    const nearSupport = Math.abs(currentPrice - support) < (atr * 0.5);
+    const nearResistance = Math.abs(currentPrice - resistance) < (atr * 0.5);
+    const nearPivot = Math.abs(currentPrice - pivot) < (atr * 0.3);
+    
+    // Buy conditions
+    if (marketStructure.trend.includes('BULLISH') && (isOversold || nearSupport || nearS1)) {
+      recommendation = 'BUY';
+      confidence = Math.min(90, 60 + (marketStructure.strength * 20) + (isOversold ? 15 : 0));
+      
+      if (nearSupport && currentPrice > support) {
+        orderType = 'BUY_LIMIT';
+        entryPrice = support + (atr * 0.2);
+        reason = 'Price near support level in bullish trend - good buy limit opportunity';
+      } else if (isOversold && marketStructure.trend === 'STRONG_BULLISH') {
+        orderType = 'BUY_STOP';
+        entryPrice = currentPrice + (atr * 0.5);
+        reason = 'Oversold in strong bullish trend - buy stop on momentum confirmation';
+      } else {
+        orderType = 'MARKET';
+        reason = 'Bullish trend with favorable conditions - immediate market entry';
+      }
+      
+      stopLoss = entryPrice - (atr * 1.5);
+      takeProfit = entryPrice + (atr * 2.5);
+    }
+    // Sell conditions
+    else if (marketStructure.trend.includes('BEARISH') && (isOverbought || nearResistance || nearR1)) {
+      recommendation = 'SELL';
+      confidence = Math.min(90, 60 + (marketStructure.strength * 20) + (isOverbought ? 15 : 0));
+      
+      if (nearResistance && currentPrice < resistance) {
+        orderType = 'SELL_LIMIT';
+        entryPrice = resistance - (atr * 0.2);
+        reason = 'Price near resistance level in bearish trend - good sell limit opportunity';
+      } else if (isOverbought && marketStructure.trend === 'STRONG_BEARISH') {
+        orderType = 'SELL_STOP';
+        entryPrice = currentPrice - (atr * 0.5);
+        reason = 'Overbought in strong bearish trend - sell stop on momentum confirmation';
+      } else {
+        orderType = 'MARKET';
+        reason = 'Bearish trend with favorable conditions - immediate market entry';
+      }
+      
+      stopLoss = entryPrice + (atr * 1.5);
+      takeProfit = entryPrice - (atr * 2.5);
+    }
+    // Range trading conditions
+    else if (nearPivot && Math.abs(rsi - 50) < 10) {
+      recommendation = 'HOLD';
+      orderType = 'NONE';
+      confidence = 40;
+      reason = 'Market consolidating around pivot - wait for breakout';
+    }
+    // Neutral conditions
+    else {
+      recommendation = 'HOLD';
+      orderType = 'NONE';
+      confidence = 30;
+      reason = 'No clear setup - wait for better risk/reward opportunity';
+    }
+    
+    // Calculate risk/reward ratio
+    const riskRewardRatio = stopLoss && takeProfit ? 
+      Math.abs(takeProfit - entryPrice) / Math.abs(stopLoss - entryPrice) : 0;
+    
+    // Adjust confidence based on risk/reward
+    if (riskRewardRatio < 1.5) {
+      confidence = Math.min(confidence - 20, 50);
+      reason += ' (Low risk/reward ratio)';
+    }
+    
+    return {
+      symbol,
+      recommendation,
+      confidence: Math.round(confidence),
+      reason,
+      entryPrice: parseFloat(entryPrice.toFixed(2)),
+      stopLoss: stopLoss ? parseFloat(stopLoss.toFixed(2)) : null,
+      takeProfit: takeProfit ? parseFloat(takeProfit.toFixed(2)) : null,
+      orderType,
+      riskRewardRatio: parseFloat(riskRewardRatio.toFixed(2)),
+      currentPrice: parseFloat(currentPrice.toFixed(2)),
+      indicators: {
+        rsi: parseFloat(rsi.toFixed(2)),
+        atr: parseFloat(atr.toFixed(2)),
+        ema9: parseFloat(ema9.toFixed(2)),
+        ema21: parseFloat(ema21.toFixed(2)),
+        support: parseFloat(support.toFixed(2)),
+        resistance: parseFloat(resistance.toFixed(2)),
+        pivot: parseFloat(pivot.toFixed(2))
+      },
+      marketStructure
+    };
+  }
+
+  calculateRSI(data, period = 14) {
+    if (data.length < period + 1) return 50;
+    
+    let gains = 0;
+    let losses = 0;
+    
+    for (let i = 1; i <= period; i++) {
+      const change = data[data.length - i] - data[data.length - i - 1];
+      if (change > 0) gains += change;
+      else losses -= change;
+    }
+    
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    
+    if (avgLoss === 0) return 100;
+    
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  calculateEMA(data, period) {
+    if (data.length < period) return data[data.length - 1];
+    const k = 2 / (period + 1);
+    let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    
+    for (let i = period; i < data.length; i++) {
+      ema = data[i] * k + ema * (1 - k);
+    }
+    
+    return ema;
+  }
+}
+
+const tradeRecommender = new TradeRecommender();
 
 // Machine Learning - Simple Moving Average Crossover Strategy
 class MLTrendPredictor {

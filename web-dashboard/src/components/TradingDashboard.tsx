@@ -11,6 +11,7 @@ import SymbolSettings from './SymbolSettings';
 import MarketScanner from './MarketScanner';
 import PerformanceMetrics from './PerformanceMetrics';
 import MLPrediction from './MLPrediction';
+import TradeRecommendations from './TradeRecommendations';
 import { supabase } from '@/lib/supabase';
 
 export default function TradingDashboard() {
@@ -141,6 +142,11 @@ export default function TradingDashboard() {
           <EconomicNews />
           <SymbolSettings />
           <MLPrediction symbol={selectedSymbol} />
+        </div>
+
+        {/* Trade Recommendations */}
+        <div className="mb-6">
+          <TradeRecommendations symbol={selectedSymbol} multiSymbol={true} />
         </div>
 
         {/* Real-time Alert Feed */}
