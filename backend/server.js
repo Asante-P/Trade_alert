@@ -300,8 +300,8 @@ async function fetchFinnhubData(symbol, limit = 100) {
   const finnhubSymbol = getFinnhubSymbol(symbol);
   
   if (!FINNHUB_API_KEY) {
-    console.error('FINNHUB_API_KEY not set in environment variables');
-    return generateMockData(symbol, limit);
+    console.error('FINNHUB_API_KEY not set in environment variables - cannot fetch live data');
+    return [];
   }
   
   try {
@@ -329,7 +329,7 @@ async function fetchFinnhubData(symbol, limit = 100) {
     return candles;
   } catch (error) {
     console.error('Finnhub API failed:', error.message);
-    return generateMockData(symbol, limit);
+    return [];
   }
 }
 
