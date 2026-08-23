@@ -5,9 +5,10 @@ import React, { useEffect, useRef, useState } from 'react';
 interface TradingViewChartProps {
   symbol?: string;
   height?: number;
+  onSymbolChange?: (symbol: string) => void;
 }
 
-export default function TradingViewChart({ symbol = 'XAUUSD', height = 500 }: TradingViewChartProps) {
+export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string>('');
   const [isMounted, setIsMounted] = useState(false);
@@ -71,7 +72,7 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500 }: Tr
           // Chart overlays
           overlay: true,
           // Additional features
-          allow_symbol_change: true,
+          allow_symbol_change: false, // Use dropdown selector instead to sync with other components
           calendar: true,
           hide_side_toolbar: !chartSettings.showSideToolbar,
           details: true,
