@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
@@ -6,9 +6,42 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { createClient } = require('@supabase/supabase-js');
+const { 
+  registerToken, 
+  unregisterToken, 
+  getAllTokens, 
+  getTokenCount, 
+  saveAlert, 
+  getAlerts, 
+  getAlertCount 
+} = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Supabase client initialization (optional)
+let supabase = null;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+console.log('Checking Supabase credentials:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseKey,
+  urlLength: supabaseUrl?.length,
+  keyLength: supabaseKey?.length
+});
+
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('Supabase client initialized');
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error.message);
+  }
+} else {
+  console.log('Supabase credentials not provided - OB zone monitoring will be disabled');
+}
 
 // ntfy.sh configuration
 const NTFY_TOPIC = process.env.NTFY_TOPIC || 'trade_alerts';
@@ -67,19 +100,19 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// In-memory storage for FCM tokens (in production, use a database)
-const fcmTokens = new Set();
-
-// Store alert history
-const alertHistory = [];
-
 // Register FCM token
 app.post('/register-token', (req, res) => {
-  const { token } = req.body;
+  const { token, device_info } = req.body;
   if (token) {
-    fcmTokens.add(token);
-    console.log('Token registered:', token);
-    res.json({ success: true, message: 'Token registered' });
+    registerToken(token, device_info, (err, result) => {
+      if (err) {
+        console.error('Error registering token:', err);
+        res.status(500).json({ success: false, message: 'Error registering token' });
+      } else {
+        console.log('Token registered:', token);
+        res.json({ success: true, message: 'Token registered' });
+      }
+    });
   } else {
     res.status(400).json({ success: false, message: 'Token is required' });
   }
@@ -89,74 +122,113 @@ app.post('/register-token', (req, res) => {
 app.post('/unregister-token', (req, res) => {
   const { token } = req.body;
   if (token) {
-    fcmTokens.delete(token);
-    console.log('Token unregistered:', token);
-    res.json({ success: true, message: 'Token unregistered' });
+    unregisterToken(token, (err, result) => {
+      if (err) {
+        console.error('Error unregistering token:', err);
+        res.status(500).json({ success: false, message: 'Error unregistering token' });
+      } else {
+        console.log('Token unregistered:', token);
+        res.json({ success: true, message: 'Token unregistered' });
+      }
+    });
   } else {
     res.status(400).json({ success: false, message: 'Token is required' });
   }
 });
 
-// TradingView webhook endpoint
-app.post('/webhook', async (req, res) => {
-  try {
-    const alertData = req.body;
-    
-    console.log('Received TradingView alert:', alertData);
-
-    // Store alert in history
-    const alert = {
-      id: Date.now(),
-      timestamp: new Date().toISOString(),
-      type: alertData.type || 'UNKNOWN',
-      price: alertData.price || 0,
-      symbol: alertData.symbol || 'N/A',
-      timeframe: alertData.timeframe || 'N/A',
-      message: alertData.message || alertData.text || ''
-    };
-    alertHistory.unshift(alert);
-    
-    // Keep only last 100 alerts
-    if (alertHistory.length > 100) {
-      alertHistory.pop();
-    }
-
-    // Send push notification to all registered devices
-    const message = {
-      notification: {
-        title: `Trade Alert: ${alert.type}`,
-        body: alert.message || `${alert.symbol} - ${alert.type} @ ${alert.price}`
-      },
-      data: {
-        type: alert.type,
-        price: alert.price?.toString() || '0',
-        symbol: alert.symbol || 'N/A',
-        timeframe: alert.timeframe || 'N/A',
-        timestamp: alert.timestamp
-      }
-    };
-
-    const tokens = Array.from(fcmTokens);
-    if (tokens.length > 0) {
-      const response = await admin.messaging().sendEachForMulticast({
-        tokens: tokens,
-        notification: message.notification,
-        data: message.data
-      });
-      
-      console.log('Push notification sent:', response);
-    }
-
-    res.json({ success: true, message: 'Alert processed' });
-  } catch (error) {
-    console.error('Error processing webhook:', error);
-    res.status(500).json({ success: false, message: 'Error processing alert' });
-  }
-});
-
 // Get alert history
 app.get('/alerts', (req, res) => {
-  res.json({ alerts: alertHistory });
+  const limit = parseInt(req.query.limit) || 100;
+  getAlerts(limit, (err, alerts) => {
+    if (err) {
+      console.error('Error fetching alerts:', err);
+      res.status(500).json({ success: false, message: 'Error fetching alerts' });
+    } else {
+      res.json({ alerts });
+    }
+  });
+});
+
+// Get performance metrics
+app.get('/performance-metrics', (req, res) => {
+  const { symbol, days = 30 } = req.query;
+  
+  getAlerts(1000, (err, alerts) => {
+    if (err) {
+      console.error('Error fetching alerts for performance metrics:', err);
+      res.status(500).json({ success: false, message: 'Error fetching alerts' });
+      return;
+    }
+
+    // Filter by symbol if specified
+    const filteredAlerts = symbol 
+      ? alerts.filter(alert => alert.symbol === symbol)
+      : alerts;
+
+    // Filter by date range
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+    const recentAlerts = filteredAlerts.filter(alert => 
+      new Date(alert.timestamp) >= cutoffDate
+    );
+
+    // Calculate performance metrics
+    const totalAlerts = recentAlerts.length;
+    const bullishAlerts = recentAlerts.filter(a => a.direction === 'bullish').length;
+    const bearishAlerts = recentAlerts.filter(a => a.direction === 'bearish').length;
+    
+    // Calculate win rate (assuming alerts with 'success' field or positive price movement)
+    const successfulAlerts = recentAlerts.filter(a => a.success === true || a.result === 'profit').length;
+    const winRate = totalAlerts > 0 ? (successfulAlerts / totalAlerts) * 100 : 0;
+
+    // Calculate profit factor (simplified - would need actual trade data)
+    const profitableAlerts = recentAlerts.filter(a => a.profit && a.profit > 0);
+    const losingAlerts = recentAlerts.filter(a => a.profit && a.profit < 0);
+    const totalProfit = profitableAlerts.reduce((sum, a) => sum + (a.profit || 0), 0);
+    const totalLoss = Math.abs(losingAlerts.reduce((sum, a) => sum + (a.profit || 0), 0));
+    const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
+
+    // Calculate average trade duration (if available)
+    const alertsWithDuration = recentAlerts.filter(a => a.duration);
+    const avgDuration = alertsWithDuration.length > 0
+      ? alertsWithDuration.reduce((sum, a) => sum + (a.duration || 0), 0) / alertsWithDuration.length
+      : 0;
+
+    // Alert type breakdown
+    const alertTypes = {};
+    recentAlerts.forEach(alert => {
+      const type = alert.type || 'UNKNOWN';
+      alertTypes[type] = (alertTypes[type] || 0) + 1;
+    });
+
+    // Symbol breakdown
+    const symbolBreakdown = {};
+    recentAlerts.forEach(alert => {
+      const sym = alert.symbol || 'UNKNOWN';
+      symbolBreakdown[sym] = (symbolBreakdown[sym] || 0) + 1;
+    });
+
+    res.json({
+      success: true,
+      period: `${days} days`,
+      symbol: symbol || 'all',
+      metrics: {
+        totalAlerts,
+        bullishAlerts,
+        bearishAlerts,
+        winRate: winRate.toFixed(2),
+        profitFactor: profitFactor === Infinity ? '∞' : profitFactor.toFixed(2),
+        avgDuration: avgDuration.toFixed(2),
+        totalProfit: totalProfit.toFixed(2),
+        totalLoss: totalLoss.toFixed(2),
+      },
+      breakdown: {
+        alertTypes,
+        symbolBreakdown
+      },
+      recentAlerts: recentAlerts.slice(0, 50) // Return recent alerts for reference
+    });
+  });
 });
 
 // Market data proxy endpoints
@@ -316,173 +388,600 @@ function getPriceScale(symbol) {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    registeredTokens: fcmTokens.size,
-    alertCount: alertHistory.length 
+  Promise.all([
+    new Promise((resolve, reject) => {
+      getTokenCount((err, count) => {
+        if (err) reject(err);
+        else resolve(count);
+      });
+    }),
+    new Promise((resolve, reject) => {
+      getAlertCount((err, count) => {
+        if (err) reject(err);
+        else resolve(count);
+      });
+    })
+  ]).then(([tokenCount, alertCount]) => {
+    res.json({ 
+      status: 'ok', 
+      registeredTokens: tokenCount,
+      alertCount: alertCount
+    });
+  }).catch(error => {
+    console.error('Error in health check:', error);
+    res.status(500).json({ status: 'error', message: 'Database error' });
   });
 });
 
-// BOS Detection System
-let priceHistory = [];
-const BOS_CONFIG = {
-  symbol: 'XAUUSD',
-  lookbackPeriod: 40,      // Number of candles to look back for swing highs/lows (40 * 15min = 10 hours)
-  pollInterval: 60000,     // Poll every 60 seconds
-  minSwingStrength: 0.5    // Minimum price movement to consider as swing point
-};
-
-// Detect swing highs and lows
-function detectSwingPoints(prices, lookback = 10) {
-  const swingPoints = [];
-  
-  for (let i = lookback; i < prices.length - lookback; i++) {
-    const current = prices[i];
-    const isSwingHigh = prices.slice(i - lookback, i).every(p => p.high < current.high) &&
-                        prices.slice(i + 1, i + lookback + 1).every(p => p.high < current.high);
-    
-    const isSwingLow = prices.slice(i - lookback, i).every(p => p.low > current.low) &&
-                       prices.slice(i + 1, i + lookback + 1).every(p => p.low > current.low);
-    
-    if (isSwingHigh) {
-      swingPoints.push({ type: 'high', price: current.high, time: current.time, index: i });
-    }
-    if (isSwingLow) {
-      swingPoints.push({ type: 'low', price: current.low, time: current.time, index: i });
-    }
-  }
-  
-  return swingPoints;
-}
-
-// Detect Break of Structure (BOS)
-function detectBOS(currentPrice, swingPoints) {
-  if (swingPoints.length < 2) return null;
-  
-  const recentSwings = swingPoints.slice(-5); // Look at last 5 swing points
-  const lastSwing = recentSwings[recentSwings.length - 1];
-  
-  if (!lastSwing) return null;
-  
-  // Bullish BOS: Price breaks above recent swing high
-  if (lastSwing.type === 'high' && currentPrice > lastSwing.price) {
-    return {
-      type: 'BULLISH_BOS',
-      brokenLevel: lastSwing.price,
-      currentPrice: currentPrice,
-      swingTime: lastSwing.time
-    };
-  }
-  
-  // Bearish BOS: Price breaks below recent swing low
-  if (lastSwing.type === 'low' && currentPrice < lastSwing.price) {
-    return {
-      type: 'BEARISH_BOS',
-      brokenLevel: lastSwing.price,
-      currentPrice: currentPrice,
-      swingTime: lastSwing.time
-    };
-  }
-  
-  return null;
-}
-
-// Send BOS alert to all registered devices
+// Send BOS alert to all registered devices (for notification system)
 async function sendBOSAlert(bosEvent) {
   const alert = {
-    id: Date.now(),
     timestamp: new Date().toISOString(),
     type: bosEvent.type,
     price: bosEvent.currentPrice,
-    symbol: BOS_CONFIG.symbol,
-    message: `${bosEvent.type} on ${BOS_CONFIG.symbol} at $${bosEvent.currentPrice.toFixed(2)}`
+    symbol: 'XAUUSD',
+    timeframe: '15m',
+    message: `BOS Alert: ${bosEvent.type} at $${bosEvent.currentPrice.toFixed(2)}`
   };
   
-  alertHistory.unshift(alert);
-  if (alertHistory.length > 100) alertHistory.pop();
-  
+  saveAlert(alert, (err) => {
+    if (err) {
+      console.error('Error saving BOS alert to database:', err);
+    }
+  });
+
   // Send Firebase push notifications
   const message = {
     notification: {
-      title: `BOS Alert: ${bosEvent.type}`,
+      title: `🚨 BOS Alert: ${bosEvent.type}`,
       body: alert.message
     },
     data: {
       type: bosEvent.type,
       price: bosEvent.currentPrice.toString(),
-      symbol: BOS_CONFIG.symbol,
+      symbol: 'XAUUSD',
       timestamp: alert.timestamp
     }
   };
   
-  const tokens = Array.from(fcmTokens);
-  if (tokens.length > 0) {
-    try {
-      const response = await admin.messaging().sendEachForMulticast({
+  getAllTokens((err, tokens) => {
+    if (err) {
+      console.error('Error getting tokens for BOS alert:', err);
+    } else if (tokens.length > 0) {
+      // Send to Firebase
+      const tokensList = tokens.map(t => t.token);
+      admin.messaging().sendEachForMulticast({
         tokens: tokens,
         notification: message.notification,
         data: message.data
+      }).then(response => {
+        console.log('BOS Alert sent via Firebase:', response);
+      }).catch(error => {
+        console.error('Error sending BOS alert via Firebase:', error);
       });
-      console.log('BOS Alert sent via Firebase:', response);
-    } catch (error) {
-      console.error('Error sending BOS alert via Firebase:', error);
     }
-  }
+  });
   
   // Send ntfy.sh notification
   const ntfyMessage = `
 🚨 BOS Alert
 ━━━━━━━━━━━━━━━━━━━━
 ${bosEvent.type}
-Symbol: ${BOS_CONFIG.symbol}
+Symbol: XAUUSD
 Price: $${bosEvent.currentPrice.toFixed(2)}
 Time: ${new Date().toLocaleString()}
 ━━━━━━━━━━━━━━━━━━━━
   `.trim();
   
-  await sendNtfyMessage(`BOS Alert: ${bosEvent.type}`, ntfyMessage);
+  await sendNtfyMessage(`🚨 BOS Alert: ${bosEvent.type}`, ntfyMessage);
   
-  console.log('BOS Detected:', alert);
+  console.log('BOS Alert sent:', alert);
 }
 
-// Start BOS monitoring
-async function startBOSMonitoring() {
-  console.log('Starting BOS monitoring for', BOS_CONFIG.symbol);
-  
-  setInterval(async () => {
-    try {
-      // Fetch latest price data directly using the internal function
-      const newPrices = await fetchMarketData(BOS_CONFIG.symbol, 100);
-      
-      if (newPrices && newPrices.length > 0) {
-        // Update price history
-        priceHistory = [...priceHistory, ...newPrices];
-        
-        // Keep only last 100 candles
-        if (priceHistory.length > 100) {
-          priceHistory = priceHistory.slice(-100);
-        }
-        
-        // Detect swing points
-        const swingPoints = detectSwingPoints(priceHistory, BOS_CONFIG.lookbackPeriod);
-        
-        // Check for BOS
-        const currentPrice = newPrices[newPrices.length - 1].close;
-        const bosEvent = detectBOS(currentPrice, swingPoints);
-        
-        if (bosEvent) {
-          await sendBOSAlert(bosEvent);
-        }
-        
-        console.log(`BOS check completed. Price history: ${priceHistory.length} candles, Swing points: ${swingPoints.length}`);
+// OB Zone monitoring and alerting
+let activeOBZones = {}; // Object to store OB zones per symbol
+let lastOBAlertTime = {}; // Object to store last alert time per symbol
+const OB_ALERT_COOLDOWN = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Symbol monitoring configuration
+const monitoredSymbols = [
+  { symbol: 'XAUUSD', enabled: true, alertSettings: { obZones: true, trends: true } },
+  { symbol: 'EURUSD', enabled: false, alertSettings: { obZones: true, trends: false } },
+  { symbol: 'BTCUSD', enabled: false, alertSettings: { obZones: true, trends: true } },
+  { symbol: 'NAS100', enabled: false, alertSettings: { obZones: false, trends: true } }
+];
+
+// Fetch OB zones from Supabase
+async function fetchOBZonesFromSupabase(symbol = 'XAUUSD') {
+  if (!supabase) {
+    console.log('Supabase not available, returning empty OB zones');
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('bos-detection', {
+      body: {
+        symbol: symbol,
+        candles: await fetchMarketData(symbol, 100)
       }
-    } catch (error) {
-      console.error('Error in BOS monitoring:', error.message);
+    });
+
+    if (error) {
+      console.error('Error fetching OB zones from Supabase:', error);
+      return [];
     }
-  }, BOS_CONFIG.pollInterval);
+
+    if (data && data.success && data.orderBlocks) {
+      console.log(`Fetched ${data.orderBlocks.length} OB zones from Supabase`);
+      return data.orderBlocks;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error calling Supabase for OB zones:', error);
+    return [];
+  }
 }
 
-// Manual test endpoint for BOS alerts
+// Check if price is in OB zone
+function isPriceInOBZone(price, obZone) {
+  return price >= obZone.low && price <= obZone.high;
+}
+
+// Send OB zone alert
+async function sendOBZoneAlert(obZone, currentPrice, symbol = 'XAUUSD') {
+  const alertKey = `${symbol}_${obZone.direction}_${obZone.high}_${obZone.low}`;
+  const now = Date.now();
+
+  // Check cooldown
+  if (lastOBAlertTime[alertKey] && now - lastOBAlertTime[alertKey] < OB_ALERT_COOLDOWN) {
+    console.log('OB zone alert on cooldown, skipping');
+    return;
+  }
+
+  lastOBAlertTime[alertKey] = now;
+
+  const alert = {
+    timestamp: new Date().toISOString(),
+    type: 'OB_ZONE_ENTRY',
+    direction: obZone.direction,
+    price: currentPrice,
+    zoneHigh: obZone.high,
+    zoneLow: obZone.low,
+    symbol: symbol,
+    message: `${obZone.direction.toUpperCase()} Order Block Zone Reached - Price: $${currentPrice.toFixed(2)}`
+  };
+
+  // Save to database
+  saveAlert(alert, (err) => {
+    if (err) {
+      console.error('Error saving OB alert to database:', err);
+    }
+  });
+
+  // Send push notification
+  const message = {
+    notification: {
+      title: `🎯 OB Zone Alert: ${obZone.direction.toUpperCase()}`,
+      body: `${symbol} - ${obZone.direction} OB Zone @ $${currentPrice.toFixed(2)}`
+    },
+    data: {
+      type: 'OB_ZONE_ENTRY',
+      direction: obZone.direction,
+      price: currentPrice.toString(),
+      zoneHigh: obZone.high.toString(),
+      zoneLow: obZone.low.toString(),
+      symbol: symbol,
+      timestamp: alert.timestamp
+    }
+  };
+
+  getAllTokens((err, tokens) => {
+    if (err) {
+      console.error('Error getting tokens for OB alert:', err);
+    } else if (tokens.length > 0) {
+      admin.messaging().sendEachForMulticast({
+        tokens: tokens,
+        notification: message.notification,
+        data: message.data
+      }).then(response => {
+        console.log('OB Alert sent via Firebase:', response);
+      }).catch(error => {
+        console.error('Error sending OB alert via Firebase:', error);
+      });
+    }
+  });
+
+  // Send ntfy.sh notification
+  const ntfyMessage = `
+🎯 OB Zone Alert
+━━━━━━━━━━━━━━━━━━━━
+${obZone.direction.toUpperCase()} Order Block
+Symbol: ${symbol}
+Current Price: $${currentPrice.toFixed(2)}
+Zone Range: $${obZone.low.toFixed(2)} - $${obZone.high.toFixed(2)}
+Time: ${new Date().toLocaleString()}
+━━━━━━━━━━━━━━━━━━━━
+  `.trim();
+
+  await sendNtfyMessage(`🎯 OB Zone: ${obZone.direction.toUpperCase()}`, ntfyMessage);
+
+  console.log('OB Zone Alert sent:', alert);
+}
+
+// Monitor OB zones
+async function monitorOBZones(symbol = 'XAUUSD') {
+  try {
+    // Check if symbol is enabled for monitoring
+    const symbolConfig = monitoredSymbols.find(s => s.symbol === symbol);
+    if (!symbolConfig || !symbolConfig.enabled || !symbolConfig.alertSettings.obZones) {
+      return;
+    }
+
+    // Fetch current price
+    const marketData = await fetchMarketData(symbol, 5);
+    if (marketData.length === 0) {
+      console.log(`No market data available for ${symbol} OB monitoring`);
+      return;
+    }
+
+    const currentPrice = marketData[marketData.length - 1].close;
+    console.log(`Current price for ${symbol}: $${currentPrice.toFixed(2)}`);
+
+    // Fetch OB zones from Supabase
+    const obZones = await fetchOBZonesFromSupabase(symbol);
+    activeOBZones[symbol] = obZones;
+
+    // Check each OB zone
+    for (const obZone of obZones) {
+      if (isPriceInOBZone(currentPrice, obZone)) {
+        console.log(`Price in ${obZone.direction} OB zone for ${symbol}: $${obZone.low.toFixed(2)} - $${obZone.high.toFixed(2)}`);
+        await sendOBZoneAlert(obZone, currentPrice, symbol);
+      }
+    }
+  } catch (error) {
+    console.error(`Error monitoring OB zones for ${symbol}:`, error);
+  }
+}
+
+// Start periodic OB zone monitoring for all enabled symbols
+function startMultiSymbolMonitoring(intervalSeconds = 60) {
+  console.log(`Starting multi-symbol OB zone monitoring every ${intervalSeconds} seconds`);
+  
+  // Initial check for all enabled symbols
+  monitoredSymbols.forEach(symbolConfig => {
+    if (symbolConfig.enabled) {
+      monitorOBZones(symbolConfig.symbol);
+    }
+  });
+  
+  // Periodic checks for all enabled symbols
+  setInterval(() => {
+    monitoredSymbols.forEach(symbolConfig => {
+      if (symbolConfig.enabled) {
+        monitorOBZones(symbolConfig.symbol);
+      }
+    });
+  }, intervalSeconds * 1000);
+}
+
+// Manual test endpoint for OB zone alerts
+app.post('/test-ob-alert', async (req, res) => {
+  try {
+    const { symbol = 'XAUUSD' } = req.body;
+    
+    console.log('Manual OB zone check triggered for', symbol);
+    await monitorOBZones(symbol);
+    
+    res.json({ success: true, message: 'OB zone check completed', activeZones: activeOBZones.length });
+  } catch (error) {
+    console.error('Error in manual OB check:', error);
+    res.status(500).json({ success: false, message: 'Error checking OB zones' });
+  }
+});
+
+// Get active OB zones
+app.get('/ob-zones', (req, res) => {
+  const { symbol } = req.query;
+  if (symbol) {
+    res.json({ 
+      success: true, 
+      symbol: symbol,
+      zones: activeOBZones[symbol] || [],
+      count: (activeOBZones[symbol] || []).length 
+    });
+  } else {
+    res.json({ 
+      success: true, 
+      zones: activeOBZones,
+      symbols: Object.keys(activeOBZones)
+    });
+  }
+});
+
+// Get monitored symbols configuration
+app.get('/monitored-symbols', (req, res) => {
+  res.json({ 
+    success: true, 
+    symbols: monitoredSymbols 
+  });
+});
+
+// Update symbol monitoring settings
+app.post('/monitored-symbols', (req, res) => {
+  const { symbol, enabled, alertSettings } = req.body;
+  
+  const symbolIndex = monitoredSymbols.findIndex(s => s.symbol === symbol);
+  if (symbolIndex === -1) {
+    return res.status(404).json({ success: false, message: 'Symbol not found' });
+  }
+  
+  if (enabled !== undefined) {
+    monitoredSymbols[symbolIndex].enabled = enabled;
+  }
+  
+  if (alertSettings) {
+    monitoredSymbols[symbolIndex].alertSettings = { 
+      ...monitoredSymbols[symbolIndex].alertSettings, 
+      ...alertSettings 
+    };
+  }
+  
+  console.log(`Updated ${symbol} monitoring: enabled=${monitoredSymbols[symbolIndex].enabled}, settings=`, monitoredSymbols[symbolIndex].alertSettings);
+  
+  res.json({ 
+    success: true, 
+    symbol: monitoredSymbols[symbolIndex] 
+  });
+});
+
+// Market Scanner - Scan all symbols for opportunities
+app.get('/market-scan', async (req, res) => {
+  try {
+    const scanResults = [];
+    
+    for (const symbolConfig of monitoredSymbols) {
+      try {
+        // Fetch market data
+        const marketData = await fetchMarketData(symbolConfig.symbol, 50);
+        if (marketData.length === 0) continue;
+        
+        const currentPrice = marketData[marketData.length - 1].close;
+        const previousPrice = marketData[marketData.length - 2].close;
+        const priceChange = ((currentPrice - previousPrice) / previousPrice) * 100;
+        
+        // Calculate basic trend
+        const closes = marketData.slice(-20).map(d => d.close);
+        const sma20 = closes.reduce((a, b) => a + b, 0) / closes.length;
+        const trend = currentPrice > sma20 ? 'bullish' : 'bearish';
+        
+        // Fetch OB zones
+        const obZones = await fetchOBZonesFromSupabase(symbolConfig.symbol);
+        const nearOBZone = obZones.some(zone => 
+          Math.abs(currentPrice - zone.low) < (zone.high - zone.low) * 0.1 ||
+          Math.abs(currentPrice - zone.high) < (zone.high - zone.low) * 0.1
+        );
+        
+        // ML prediction
+        const mlPrediction = mlPredictor.analyzeTrend(marketData);
+        
+        scanResults.push({
+          symbol: symbolConfig.symbol,
+          enabled: symbolConfig.enabled,
+          currentPrice: currentPrice,
+          priceChange: priceChange.toFixed(2),
+          trend: trend,
+          nearOBZone: nearOBZone,
+          obZoneCount: obZones.length,
+          signal: generateSignal(trend, priceChange, nearOBZone, obZones.length),
+          mlPrediction: mlPrediction
+        });
+      } catch (error) {
+        console.error(`Error scanning ${symbolConfig.symbol}:`, error.message);
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      timestamp: new Date().toISOString(),
+      results: scanResults 
+    });
+  } catch (error) {
+    console.error('Market scan error:', error);
+    res.status(500).json({ success: false, message: 'Market scan failed' });
+  }
+});
+
+// ML Prediction endpoint
+app.get('/ml-prediction', async (req, res) => {
+  try {
+    const { symbol = 'XAUUSD' } = req.query;
+    
+    // Fetch market data
+    const marketData = await fetchMarketData(symbol, 100);
+    if (marketData.length === 0) {
+      return res.status(404).json({ success: false, message: 'No market data available' });
+    }
+    
+    // Get ML prediction
+    const prediction = mlPredictor.analyzeTrend(marketData);
+    
+    res.json({
+      success: true,
+      symbol: symbol,
+      timestamp: new Date().toISOString(),
+      prediction: prediction
+    });
+  } catch (error) {
+    console.error('ML prediction error:', error);
+    res.status(500).json({ success: false, message: 'ML prediction failed' });
+  }
+});
+
+// Generate trading signal based on market conditions
+function generateSignal(trend, priceChange, nearOBZone, obZoneCount) {
+  if (nearOBZone && trend === 'bullish') return 'STRONG BUY';
+  if (nearOBZone && trend === 'bearish') return 'STRONG SELL';
+  if (Math.abs(priceChange) > 0.5 && trend === 'bullish') return 'BUY';
+  if (Math.abs(priceChange) > 0.5 && trend === 'bearish') return 'SELL';
+  if (obZoneCount > 0) return 'WATCH';
+  return 'NEUTRAL';
+}
+
+// Machine Learning - Simple Moving Average Crossover Strategy
+class MLTrendPredictor {
+  constructor() {
+    this.shortPeriod = 9;
+    this.longPeriod = 21;
+    this.signalPeriod = 7;
+  }
+
+  calculateSMA(data, period) {
+    if (data.length < period) return null;
+    const slice = data.slice(-period);
+    return slice.reduce((a, b) => a + b, 0) / period;
+  }
+
+  calculateEMA(data, period) {
+    if (data.length < period) return null;
+    const k = 2 / (period + 1);
+    let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    
+    for (let i = period; i < data.length; i++) {
+      ema = data[i] * k + ema * (1 - k);
+    }
+    
+    return ema;
+  }
+
+  calculateRSI(data, period = 14) {
+    if (data.length < period + 1) return null;
+    
+    let gains = 0;
+    let losses = 0;
+    
+    for (let i = 1; i <= period; i++) {
+      const change = data[data.length - i] - data[data.length - i - 1];
+      if (change > 0) {
+        gains += change;
+      } else {
+        losses -= change;
+      }
+    }
+    
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  calculateMACD(data) {
+    const ema12 = this.calculateEMA(data, 12);
+    const ema26 = this.calculateEMA(data, 26);
+    
+    if (!ema12 || !ema26) return null;
+    
+    const macd = ema12 - ema26;
+    return macd;
+  }
+
+  analyzeTrend(data) {
+    if (data.length < this.longPeriod) {
+      return { prediction: 'NEUTRAL', confidence: 0, signals: [] };
+    }
+
+    const closes = data.map(d => d.close || d);
+    
+    // Calculate indicators
+    const shortEMA = this.calculateEMA(closes, this.shortPeriod);
+    const longEMA = this.calculateEMA(closes, this.longPeriod);
+    const rsi = this.calculateRSI(closes);
+    const macd = this.calculateMACD(closes);
+    
+    const signals = [];
+    let bullishScore = 0;
+    let bearishScore = 0;
+
+    // EMA Crossover Signal
+    if (shortEMA && longEMA) {
+      if (shortEMA > longEMA) {
+        bullishScore += 2;
+        signals.push({ type: 'EMA_CROSS', direction: 'bullish', strength: 'strong' });
+      } else {
+        bearishScore += 2;
+        signals.push({ type: 'EMA_CROSS', direction: 'bearish', strength: 'strong' });
+      }
+    }
+
+    // RSI Signal
+    if (rsi !== null) {
+      if (rsi < 30) {
+        bullishScore += 2;
+        signals.push({ type: 'RSI', direction: 'bullish', strength: 'strong', value: rsi });
+      } else if (rsi < 40) {
+        bullishScore += 1;
+        signals.push({ type: 'RSI', direction: 'bullish', strength: 'moderate', value: rsi });
+      } else if (rsi > 70) {
+        bearishScore += 2;
+        signals.push({ type: 'RSI', direction: 'bearish', strength: 'strong', value: rsi });
+      } else if (rsi > 60) {
+        bearishScore += 1;
+        signals.push({ type: 'RSI', direction: 'bearish', strength: 'moderate', value: rsi });
+      }
+    }
+
+    // MACD Signal
+    if (macd !== null) {
+      if (macd > 0) {
+        bullishScore += 1;
+        signals.push({ type: 'MACD', direction: 'bullish', strength: 'moderate', value: macd });
+      } else {
+        bearishScore += 1;
+        signals.push({ type: 'MACD', direction: 'bearish', strength: 'moderate', value: macd });
+      }
+    }
+
+    // Price Momentum
+    const recentChange = (closes[closes.length - 1] - closes[closes.length - 5]) / closes[closes.length - 5] * 100;
+    if (recentChange > 0.5) {
+      bullishScore += 1;
+      signals.push({ type: 'MOMENTUM', direction: 'bullish', strength: 'moderate', value: recentChange });
+    } else if (recentChange < -0.5) {
+      bearishScore += 1;
+      signals.push({ type: 'MOMENTUM', direction: 'bearish', strength: 'moderate', value: recentChange });
+    }
+
+    // Calculate prediction
+    const totalScore = bullishScore + bearishScore;
+    const confidence = totalScore > 0 ? Math.max(bullishScore, bearishScore) / totalScore : 0;
+    
+    let prediction = 'NEUTRAL';
+    if (bullishScore > bearishScore && bullishScore >= 2) {
+      prediction = bullishScore >= 4 ? 'STRONG_BULLISH' : 'BULLISH';
+    } else if (bearishScore > bullishScore && bearishScore >= 2) {
+      prediction = bearishScore >= 4 ? 'STRONG_BEARISH' : 'BEARISH';
+    }
+
+    return {
+      prediction,
+      confidence: Math.round(confidence * 100),
+      signals,
+      indicators: {
+        shortEMA: shortEMA?.toFixed(2) || null,
+        longEMA: longEMA?.toFixed(2) || null,
+        rsi: rsi?.toFixed(2) || null,
+        macd: macd?.toFixed(2) || null
+      }
+    };
+  }
+}
+
+// Initialize ML predictor
+const mlPredictor = new MLTrendPredictor();
+
+// Manual test endpoint for BOS alerts (for testing notification system)
 app.post('/test-bos-alert', async (req, res) => {
   try {
     const { type = 'BULLISH_BOS', price = 4355.67 } = req.body;
@@ -516,12 +1015,12 @@ app.post('/test-bos-alert', async (req, res) => {
   }
 });
 
-// Start monitoring after server is ready
-setTimeout(() => {
-  startBOSMonitoring();
-}, 5000);
-
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('Webhook endpoint: http://localhost:' + PORT + '/webhook');
+  console.log(`BOS detection handled by Supabase Edge Functions (Pine Script accurate)`);
+  console.log(`Multi-symbol OB zone monitoring active`);
+  
+  // Start multi-symbol OB zone monitoring
+  startMultiSymbolMonitoring(60); // Monitor all enabled symbols every 60 seconds
 });
