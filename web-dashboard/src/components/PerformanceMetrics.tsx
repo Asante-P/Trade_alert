@@ -37,7 +37,7 @@ export default function PerformanceMetrics() {
   const fetchPerformanceMetrics = async () => {
     setIsLoading(true);
     try {
-      const url = `http://localhost:3000/performance-metrics?days=${selectedPeriod}&symbol=${selectedSymbol === 'all' ? '' : selectedSymbol}`;
+      const url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/performance-metrics?days=${selectedPeriod}&symbol=${selectedSymbol === 'all' ? '' : selectedSymbol}`;
       const response = await fetch(url);
       const data = await response.json();
       if (data.success) {

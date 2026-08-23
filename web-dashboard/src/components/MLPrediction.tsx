@@ -42,7 +42,7 @@ export default function MLPrediction({ symbol = 'XAUUSD' }: { symbol?: string })
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:3000/ml-prediction?symbol=${symbol}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/ml-prediction?symbol=${symbol}`);
       const data: MLResponse = await response.json();
       if (data.success) {
         setPredictionData(data.prediction);
