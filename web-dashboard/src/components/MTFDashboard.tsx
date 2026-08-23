@@ -83,7 +83,7 @@ export default function MTFDashboard({
               setOverallBias(bosData.overallBias as 'Bullish' | 'Bearish' | 'Neutral');
               return; // Exit early if we got Supabase data
             } else {
-              console.log('Supabase MTF data not available, using fallback');
+              console.log('Supabase data not available or error, using fallback calculation');
             }
           } catch (supabaseError) {
             console.error('Error calling Supabase for MTF:', supabaseError);
