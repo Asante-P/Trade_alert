@@ -6,9 +6,10 @@ interface TradingViewChartProps {
   symbol?: string;
   height?: number;
   onSymbolChange?: (symbol: string) => void;
+  onTimeframeChange?: (timeframe: string) => void;
 }
 
-export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange }: TradingViewChartProps) {
+export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange, onTimeframeChange }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string>('');
   const [isMounted, setIsMounted] = useState(false);
@@ -21,6 +22,13 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
     showEMA: true,
     showSideToolbar: true,
   });
+
+  // Notify parent when timeframe changes
+  useEffect(() => {
+    if (onTimeframeChange) {
+      onTimeframeChange(chartSettings.interval);
+    }
+  }, [chartSettings.interval, onTimeframeChange]);
 
   useEffect(() => {
     setIsMounted(true);

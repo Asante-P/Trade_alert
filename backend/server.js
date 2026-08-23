@@ -757,10 +757,9 @@ app.get('/market-scan', async (req, res) => {
         const previousPrice = marketData[marketData.length - 2].close;
         const priceChange = ((currentPrice - previousPrice) / previousPrice) * 100;
         
-        // Calculate basic trend
-        const closes = marketData.slice(-20).map(d => d.close);
-        const sma20 = closes.reduce((a, b) => a + b, 0) / closes.length;
-        const trend = currentPrice > sma20 ? 'bullish' : 'bearish';
+        // Use TradeRecommender for consistent trend analysis
+        const tradeRecommendation = tradeRecommender.generateTradeRecommendation(symbolConfig.symbol, marketData, '15');
+        const trend = tradeRecommendation.marketStructure.trend.toLowerCase();
         
         // Fetch OB zones
         const obZones = await fetchOBZonesFromSupabase(symbolConfig.symbol);
@@ -772,6 +771,13 @@ app.get('/market-scan', async (req, res) => {
         // ML prediction
         const mlPrediction = mlPredictor.analyzeTrend(marketData);
         
+        // Use trade recommendation for signal
+        const signal = tradeRecommendation.recommendation === 'BUY' ? 
+          (tradeRecommendation.confidence > 70 ? 'STRONG BUY' : 'BUY') :
+          tradeRecommendation.recommendation === 'SELL' ? 
+          (tradeRecommendation.confidence > 70 ? 'STRONG SELL' : 'SELL') :
+          'WATCH';
+        
         scanResults.push({
           symbol: symbolConfig.symbol,
           enabled: symbolConfig.enabled,
@@ -780,7 +786,7 @@ app.get('/market-scan', async (req, res) => {
           trend: trend,
           nearOBZone: nearOBZone,
           obZoneCount: obZones.length,
-          signal: generateSignal(trend, priceChange, nearOBZone, obZones.length),
+          signal: signal,
           mlPrediction: mlPrediction
         });
       } catch (error) {
@@ -828,7 +834,7 @@ app.get('/ml-prediction', async (req, res) => {
 // Trade Recommendation endpoint
 app.get('/trade-recommendation', async (req, res) => {
   try {
-    const { symbol = 'XAUUSD' } = req.query;
+    const { symbol = 'XAUUSD', timeframe = '15' } = req.query;
     
     // Fetch market data
     const marketData = await fetchMarketData(symbol, 100);
@@ -836,12 +842,13 @@ app.get('/trade-recommendation', async (req, res) => {
       return res.status(404).json({ success: false, message: 'No market data available' });
     }
     
-    // Get trade recommendation
-    const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData);
+    // Get trade recommendation with timeframe
+    const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData, timeframe);
     
     res.json({
       success: true,
       symbol: symbol,
+      timeframe: timeframe,
       timestamp: new Date().toISOString(),
       recommendation: recommendation
     });
@@ -855,6 +862,7 @@ app.get('/trade-recommendation', async (req, res) => {
 app.get('/trade-recommendations', async (req, res) => {
   try {
     const symbols = req.query.symbols ? req.query.symbols.split(',') : ['XAUUSD', 'EURUSD', 'BTCUSD', 'NAS100'];
+    const { timeframe = '15', activeSymbol = 'XAUUSD' } = req.query;
     
     const recommendations = [];
     
@@ -862,7 +870,7 @@ app.get('/trade-recommendations', async (req, res) => {
       try {
         const marketData = await fetchMarketData(symbol, 100);
         if (marketData.length > 0) {
-          const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData);
+          const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData, timeframe);
           recommendations.push(recommendation);
         }
       } catch (error) {
@@ -870,8 +878,17 @@ app.get('/trade-recommendations', async (req, res) => {
       }
     }
     
+    // Sort with active symbol first
+    recommendations.sort((a, b) => {
+      if (a.symbol === activeSymbol) return -1;
+      if (b.symbol === activeSymbol) return 1;
+      return a.symbol.localeCompare(b.symbol);
+    });
+    
     res.json({
       success: true,
+      timeframe: timeframe,
+      activeSymbol: activeSymbol,
       timestamp: new Date().toISOString(),
       recommendations: recommendations
     });
@@ -943,10 +960,10 @@ class TradeRecommender {
     return { pivot, r1, r2, s1, s2 };
   }
 
-  analyzeMarketStructure(data) {
+  analyzeMarketStructure(data, period = 20) {
     if (data.length < 5) return { trend: 'NEUTRAL', strength: 0 };
     
-    const recent = data.slice(-20);
+    const recent = data.slice(-period);
     let higherHighs = 0;
     let higherLows = 0;
     let lowerHighs = 0;
@@ -971,7 +988,7 @@ class TradeRecommender {
     return { trend: 'NEUTRAL', strength: 0.5 };
   }
 
-  generateTradeRecommendation(symbol, marketData) {
+  generateTradeRecommendation(symbol, marketData, timeframe = '15') {
     if (marketData.length < 30) {
       return {
         symbol,
@@ -986,24 +1003,27 @@ class TradeRecommender {
       };
     }
 
+    // Timeframe-specific parameters
+    const timeframeParams = this.getTimeframeParameters(timeframe);
+    
     const currentPrice = marketData[marketData.length - 1].close;
     const closes = marketData.map(c => c.close);
     
-    // Calculate indicators
-    const rsi = this.calculateRSI(closes, 14);
-    const atr = this.calculateATR(marketData, 14);
-    const { support, resistance } = this.findSupportResistance(marketData, 20);
+    // Calculate indicators with timeframe-specific periods
+    const rsi = this.calculateRSI(closes, timeframeParams.rsiPeriod);
+    const atr = this.calculateATR(marketData, timeframeParams.atrPeriod);
+    const { support, resistance } = this.findSupportResistance(marketData, timeframeParams.supportResistancePeriod);
     const { pivot, r1, r2, s1, s2 } = this.calculatePivotPoints(marketData);
-    const marketStructure = this.analyzeMarketStructure(marketData);
+    const marketStructure = this.analyzeMarketStructure(marketData, timeframeParams.structurePeriod);
     
-    // Calculate EMAs
-    const ema9 = this.calculateEMA(closes, 9);
-    const ema21 = this.calculateEMA(closes, 21);
-    const ema50 = this.calculateEMA(closes, 50);
+    // Calculate EMAs with timeframe-specific periods
+    const emaShort = this.calculateEMA(closes, timeframeParams.emaShort);
+    const emaMedium = this.calculateEMA(closes, timeframeParams.emaMedium);
+    const emaLong = this.calculateEMA(closes, timeframeParams.emaLong);
     
     // Determine trend and momentum
-    const trend = ema9 > ema21 ? (ema21 > ema50 ? 'STRONG_BULLISH' : 'BULLISH') : 
-                 (ema21 < ema50 ? 'STRONG_BEARISH' : 'BEARISH');
+    const trend = emaShort > emaMedium ? (emaMedium > emaLong ? 'STRONG_BULLISH' : 'BULLISH') : 
+                 (emaMedium < emaLong ? 'STRONG_BEARISH' : 'BEARISH');
     
     let recommendation = 'HOLD';
     let orderType = 'NONE';
@@ -1013,12 +1033,12 @@ class TradeRecommender {
     let confidence = 0;
     let reason = '';
     
-    // Advanced analysis logic
-    const isOversold = rsi < this.rsiOversold;
-    const isOverbought = rsi > this.rsiOverbought;
-    const nearSupport = Math.abs(currentPrice - support) < (atr * 0.5);
-    const nearResistance = Math.abs(currentPrice - resistance) < (atr * 0.5);
-    const nearPivot = Math.abs(currentPrice - pivot) < (atr * 0.3);
+    // Advanced analysis logic with timeframe-specific thresholds
+    const isOversold = rsi < timeframeParams.rsiOversold;
+    const isOverbought = rsi > timeframeParams.rsiOverbought;
+    const nearSupport = Math.abs(currentPrice - support) < (atr * timeframeParams.supportThreshold);
+    const nearResistance = Math.abs(currentPrice - resistance) < (atr * timeframeParams.resistanceThreshold);
+    const nearPivot = Math.abs(currentPrice - pivot) < (atr * timeframeParams.pivotThreshold);
     
     // Buy conditions
     if (marketStructure.trend.includes('BULLISH') && (isOversold || nearSupport || nearS1)) {
@@ -1028,18 +1048,18 @@ class TradeRecommender {
       if (nearSupport && currentPrice > support) {
         orderType = 'BUY_LIMIT';
         entryPrice = support + (atr * 0.2);
-        reason = 'Price near support level in bullish trend - good buy limit opportunity';
+        reason = `Price near support level in bullish trend (${timeframe} timeframe) - good buy limit opportunity`;
       } else if (isOversold && marketStructure.trend === 'STRONG_BULLISH') {
         orderType = 'BUY_STOP';
         entryPrice = currentPrice + (atr * 0.5);
-        reason = 'Oversold in strong bullish trend - buy stop on momentum confirmation';
+        reason = `Oversold in strong bullish trend (${timeframe} timeframe) - buy stop on momentum confirmation`;
       } else {
         orderType = 'MARKET';
-        reason = 'Bullish trend with favorable conditions - immediate market entry';
+        reason = `Bullish trend with favorable conditions (${timeframe} timeframe) - immediate market entry`;
       }
       
-      stopLoss = entryPrice - (atr * 1.5);
-      takeProfit = entryPrice + (atr * 2.5);
+      stopLoss = entryPrice - (atr * timeframeParams.stopLossMultiplier);
+      takeProfit = entryPrice + (atr * timeframeParams.takeProfitMultiplier);
     }
     // Sell conditions
     else if (marketStructure.trend.includes('BEARISH') && (isOverbought || nearResistance || nearR1)) {
@@ -1049,32 +1069,32 @@ class TradeRecommender {
       if (nearResistance && currentPrice < resistance) {
         orderType = 'SELL_LIMIT';
         entryPrice = resistance - (atr * 0.2);
-        reason = 'Price near resistance level in bearish trend - good sell limit opportunity';
+        reason = `Price near resistance level in bearish trend (${timeframe} timeframe) - good sell limit opportunity`;
       } else if (isOverbought && marketStructure.trend === 'STRONG_BEARISH') {
         orderType = 'SELL_STOP';
         entryPrice = currentPrice - (atr * 0.5);
-        reason = 'Overbought in strong bearish trend - sell stop on momentum confirmation';
+        reason = `Overbought in strong bearish trend (${timeframe} timeframe) - sell stop on momentum confirmation`;
       } else {
         orderType = 'MARKET';
-        reason = 'Bearish trend with favorable conditions - immediate market entry';
+        reason = `Bearish trend with favorable conditions (${timeframe} timeframe) - immediate market entry`;
       }
       
-      stopLoss = entryPrice + (atr * 1.5);
-      takeProfit = entryPrice - (atr * 2.5);
+      stopLoss = entryPrice + (atr * timeframeParams.stopLossMultiplier);
+      takeProfit = entryPrice - (atr * timeframeParams.takeProfitMultiplier);
     }
     // Range trading conditions
     else if (nearPivot && Math.abs(rsi - 50) < 10) {
       recommendation = 'HOLD';
       orderType = 'NONE';
       confidence = 40;
-      reason = 'Market consolidating around pivot - wait for breakout';
+      reason = `Market consolidating around pivot (${timeframe} timeframe) - wait for breakout`;
     }
     // Neutral conditions
     else {
       recommendation = 'HOLD';
       orderType = 'NONE';
       confidence = 30;
-      reason = 'No clear setup - wait for better risk/reward opportunity';
+      reason = `No clear setup (${timeframe} timeframe) - wait for better risk/reward opportunity`;
     }
     
     // Calculate risk/reward ratio
@@ -1082,7 +1102,7 @@ class TradeRecommender {
       Math.abs(takeProfit - entryPrice) / Math.abs(stopLoss - entryPrice) : 0;
     
     // Adjust confidence based on risk/reward
-    if (riskRewardRatio < 1.5) {
+    if (riskRewardRatio < timeframeParams.minRiskReward) {
       confidence = Math.min(confidence - 20, 50);
       reason += ' (Low risk/reward ratio)';
     }
@@ -1098,17 +1118,129 @@ class TradeRecommender {
       orderType,
       riskRewardRatio: parseFloat(riskRewardRatio.toFixed(2)),
       currentPrice: parseFloat(currentPrice.toFixed(2)),
+      timeframe: timeframe,
       indicators: {
         rsi: parseFloat(rsi.toFixed(2)),
         atr: parseFloat(atr.toFixed(2)),
-        ema9: parseFloat(ema9.toFixed(2)),
-        ema21: parseFloat(ema21.toFixed(2)),
+        emaShort: parseFloat(emaShort.toFixed(2)),
+        emaMedium: parseFloat(emaMedium.toFixed(2)),
+        emaLong: parseFloat(emaLong.toFixed(2)),
         support: parseFloat(support.toFixed(2)),
         resistance: parseFloat(resistance.toFixed(2)),
         pivot: parseFloat(pivot.toFixed(2))
       },
       marketStructure
     };
+  }
+
+  getTimeframeParameters(timeframe) {
+    // Different parameters for different timeframes
+    const params = {
+      '1': { // 1 minute - scalping
+        rsiPeriod: 7,
+        atrPeriod: 7,
+        supportResistancePeriod: 10,
+        structurePeriod: 10,
+        emaShort: 5,
+        emaMedium: 13,
+        emaLong: 21,
+        rsiOversold: 25,
+        rsiOverbought: 75,
+        supportThreshold: 0.3,
+        resistanceThreshold: 0.3,
+        pivotThreshold: 0.2,
+        stopLossMultiplier: 1.0,
+        takeProfitMultiplier: 1.5,
+        minRiskReward: 1.2
+      },
+      '5': { // 5 minutes - scalping
+        rsiPeriod: 10,
+        atrPeriod: 10,
+        supportResistancePeriod: 15,
+        structurePeriod: 15,
+        emaShort: 7,
+        emaMedium: 17,
+        emaLong: 34,
+        rsiOversold: 28,
+        rsiOverbought: 72,
+        supportThreshold: 0.4,
+        resistanceThreshold: 0.4,
+        pivotThreshold: 0.25,
+        stopLossMultiplier: 1.2,
+        takeProfitMultiplier: 2.0,
+        minRiskReward: 1.3
+      },
+      '15': { // 15 minutes - day trading (default)
+        rsiPeriod: 14,
+        atrPeriod: 14,
+        supportResistancePeriod: 20,
+        structurePeriod: 20,
+        emaShort: 9,
+        emaMedium: 21,
+        emaLong: 50,
+        rsiOversold: 30,
+        rsiOverbought: 70,
+        supportThreshold: 0.5,
+        resistanceThreshold: 0.5,
+        pivotThreshold: 0.3,
+        stopLossMultiplier: 1.5,
+        takeProfitMultiplier: 2.5,
+        minRiskReward: 1.5
+      },
+      '60': { // 1 hour - swing trading
+        rsiPeriod: 14,
+        atrPeriod: 14,
+        supportResistancePeriod: 25,
+        structurePeriod: 25,
+        emaShort: 12,
+        emaMedium: 26,
+        emaLong: 55,
+        rsiOversold: 32,
+        rsiOverbought: 68,
+        supportThreshold: 0.6,
+        resistanceThreshold: 0.6,
+        pivotThreshold: 0.35,
+        stopLossMultiplier: 1.8,
+        takeProfitMultiplier: 3.0,
+        minRiskReward: 1.6
+      },
+      '240': { // 4 hours - swing trading
+        rsiPeriod: 14,
+        atrPeriod: 20,
+        supportResistancePeriod: 30,
+        structurePeriod: 30,
+        emaShort: 15,
+        emaMedium: 30,
+        emaLong: 60,
+        rsiOversold: 35,
+        rsiOverbought: 65,
+        supportThreshold: 0.7,
+        resistanceThreshold: 0.7,
+        pivotThreshold: 0.4,
+        stopLossMultiplier: 2.0,
+        takeProfitMultiplier: 3.5,
+        minRiskReward: 1.7
+      },
+      'D': { // Daily - position trading
+        rsiPeriod: 14,
+        atrPeriod: 20,
+        supportResistancePeriod: 40,
+        structurePeriod: 40,
+        emaShort: 20,
+        emaMedium: 50,
+        emaLong: 100,
+        rsiOversold: 40,
+        rsiOverbought: 60,
+        supportThreshold: 0.8,
+        resistanceThreshold: 0.8,
+        pivotThreshold: 0.5,
+        stopLossMultiplier: 2.5,
+        takeProfitMultiplier: 4.0,
+        minRiskReward: 1.8
+      }
+    };
+    
+    return params[timeframe] || params['15']; // Default to 15-minute timeframe
   }
 
   calculateRSI(data, period = 14) {

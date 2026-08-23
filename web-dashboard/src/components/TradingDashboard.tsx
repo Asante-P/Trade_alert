@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 export default function TradingDashboard() {
   const [health, setHealth] = useState({ status: 'ok', registeredTokens: 0, alertCount: 0 });
   const [selectedSymbol, setSelectedSymbol] = useState('XAUUSD');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('15');
   const [chartKey, setChartKey] = useState(0);
   const [realtimeAlerts, setRealtimeAlerts] = useState<any[]>([]);
 
@@ -131,7 +132,12 @@ export default function TradingDashboard() {
       <main className="max-w-7xl mx-auto p-6">
         {/* Chart Section */}
         <div className="mb-6">
-          <TradingViewChart key={chartKey} symbol={selectedSymbol} height={700} />
+          <TradingViewChart 
+            key={chartKey} 
+            symbol={selectedSymbol} 
+            height={700} 
+            onTimeframeChange={setSelectedTimeframe}
+          />
         </div>
 
         {/* Analysis Panels - Horizontal Layout */}
@@ -146,7 +152,12 @@ export default function TradingDashboard() {
 
         {/* Trade Recommendations */}
         <div className="mb-6">
-          <TradeRecommendations symbol={selectedSymbol} multiSymbol={true} />
+          <TradeRecommendations 
+            symbol={selectedSymbol} 
+            multiSymbol={true} 
+            timeframe={selectedTimeframe}
+            activeSymbol={selectedSymbol}
+          />
         </div>
 
         {/* Real-time Alert Feed */}

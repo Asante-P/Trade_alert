@@ -31,9 +31,11 @@ interface TradeRecommendation {
 interface TradeRecommendationsProps {
   symbol?: string;
   multiSymbol?: boolean;
+  timeframe?: string;
+  activeSymbol?: string;
 }
 
-export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = false }: TradeRecommendationsProps) {
+export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = false, timeframe = '15', activeSymbol = 'XAUUSD' }: TradeRecommendationsProps) {
   const [recommendations, setRecommendations] = useState<TradeRecommendation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +46,9 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
     try {
       let url;
       if (multiSymbol) {
-        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendations?symbols=XAUUSD,EURUSD,BTCUSD,NAS100`;
+        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendations?symbols=XAUUSD,EURUSD,BTCUSD,NAS100&timeframe=${timeframe}&activeSymbol=${activeSymbol}`;
       } else {
-        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendation?symbol=${symbol}`;
+        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendation?symbol=${symbol}&timeframe=${timeframe}`;
       }
       
       const response = await fetch(url);
@@ -79,7 +81,7 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
     fetchRecommendations();
     const interval = setInterval(fetchRecommendations, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [symbol, multiSymbol]);
+  }, [symbol, multiSymbol, timeframe, activeSymbol]);
 
   const getRecommendationColor = (rec: string) => {
     switch (rec) {
@@ -129,7 +131,7 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
   return (
     <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
       <h3 className="text-sm font-semibold text-gray-300 mb-3">
-        {multiSymbol ? 'Multi-Symbol Trade Recommendations' : `Trade Recommendations - ${symbol}`}
+        {multiSymbol ? `Multi-Symbol Trade Recommendations (${timeframe} timeframe)` : `Trade Recommendations - ${symbol} (${timeframe} timeframe)`}
       </h3>
       
       <div className="space-y-3">
