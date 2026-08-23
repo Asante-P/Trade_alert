@@ -338,17 +338,17 @@ function getYahooSymbol(symbol) {
     case 'XAUUSD': return 'GC=F'; // Gold Futures (XAUUSD)
     case 'EURUSD': return 'EURUSD=X';
     case 'BTCUSD': return 'BTC-USD';
-    case 'NAS100': return 'NDX'; // NASDAQ 100
+    case 'NAS100': return '^NDX'; // NASDAQ 100 index
     default: return symbol;
   }
 }
 
 function getFinnhubSymbol(symbol) {
   switch (symbol.toUpperCase()) {
-    case 'XAUUSD': return 'GC=F'; // Gold Futures (XAUUSD)
-    case 'EURUSD': return 'EURUSD=X';
+    case 'XAUUSD': return 'USDXAU=X'; // XAU/USD forex pair
+    case 'EURUSD': return 'EURUSD';
     case 'BTCUSD': return 'BINANCE:BTCUSDT'; // Bitcoin on Binance
-    case 'NAS100': return 'NDX'; // NASDAQ 100
+    case 'NAS100': return 'US100'; // NASDAQ 100
     default: return symbol;
   }
 }
@@ -1039,6 +1039,8 @@ class TradeRecommender {
     const nearSupport = Math.abs(currentPrice - support) < (atr * timeframeParams.supportThreshold);
     const nearResistance = Math.abs(currentPrice - resistance) < (atr * timeframeParams.resistanceThreshold);
     const nearPivot = Math.abs(currentPrice - pivot) < (atr * timeframeParams.pivotThreshold);
+    const nearS1 = Math.abs(currentPrice - s1) < (atr * timeframeParams.supportThreshold);
+    const nearR1 = Math.abs(currentPrice - r1) < (atr * timeframeParams.resistanceThreshold);
     
     // Buy conditions
     if (marketStructure.trend.includes('BULLISH') && (isOversold || nearSupport || nearS1)) {
