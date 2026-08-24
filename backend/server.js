@@ -759,6 +759,13 @@ app.get('/market-scan', async (req, res) => {
         
         // Use TradeRecommender for consistent trend analysis
         const tradeRecommendation = tradeRecommender.generateTradeRecommendation(symbolConfig.symbol, marketData, '15');
+        
+        // Check if trade recommendation was successful
+        if (!tradeRecommendation || !tradeRecommendation.marketStructure) {
+          console.log(`Trade recommendation failed for ${symbolConfig.symbol}, skipping`);
+          continue;
+        }
+        
         const trend = tradeRecommendation.marketStructure.trend.toLowerCase();
         
         // Fetch OB zones
