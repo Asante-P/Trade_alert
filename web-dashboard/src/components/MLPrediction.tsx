@@ -42,14 +42,7 @@ export default function MLPrediction({ symbol = 'XAUUSD' }: { symbol?: string })
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/ml-prediction?symbol=${symbol}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('No market data available - market may be closed');
-          return;
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
+      const response = await fetch(`/api/ml-prediction?symbol=${symbol}`);
       const data: MLResponse = await response.json();
       if (data.success) {
         setPredictionData(data.prediction);

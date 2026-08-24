@@ -47,9 +47,9 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
     try {
       let url;
       if (multiSymbol) {
-        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendations?symbols=XAUUSD,EURUSD,BTCUSD,NAS100&timeframe=${timeframe}&activeSymbol=${activeSymbol}`;
+        url = `/api/trade-recommendations?symbols=XAUUSD,EURUSD,BTCUSD,NAS100&timeframe=${timeframe}&activeSymbol=${activeSymbol}`;
       } else {
-        url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/trade-recommendation?symbol=${symbol}&timeframe=${timeframe}`;
+        url = `/api/trade-recommendation?symbol=${symbol}&timeframe=${timeframe}`;
       }
       
       const response = await fetch(url);

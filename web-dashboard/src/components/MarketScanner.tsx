@@ -21,7 +21,7 @@ export default function MarketScanner() {
   const runMarketScan = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/market-scan`);
+      const response = await fetch('/api/market-scan');
       const data = await response.json();
       if (data.success) {
         setScanResults(data.results);
