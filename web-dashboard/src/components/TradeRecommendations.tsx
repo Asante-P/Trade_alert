@@ -16,8 +16,9 @@ interface TradeRecommendation {
   indicators: {
     rsi: number;
     atr: number;
-    ema9: number;
-    ema21: number;
+    emaShort: number;
+    emaMedium: number;
+    emaLong: number;
     support: number;
     resistance: number;
     pivot: number;
@@ -209,6 +210,21 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
                 <span className={rec.marketStructure.trend.includes('BULLISH') ? 'text-green-400' : rec.marketStructure.trend.includes('BEARISH') ? 'text-red-400' : 'text-yellow-400'}>
                   {rec.marketStructure.trend}
                 </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-xs mt-1">
+              <div>
+                <span className="text-gray-500">EMA Short:</span>{' '}
+                <span className="text-cyan-400">{rec.indicators.emaShort.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">EMA Medium:</span>{' '}
+                <span className="text-purple-400">{rec.indicators.emaMedium.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">EMA Long:</span>{' '}
+                <span className="text-pink-400">{rec.indicators.emaLong.toFixed(2)}</span>
               </div>
             </div>
 
