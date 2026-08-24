@@ -22,7 +22,7 @@ export default function SymbolSettings() {
 
   const fetchSymbolSettings = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/monitored-symbols`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || ''}/monitored-symbols`);
       const data = await response.json();
       if (data.success) {
         setSymbols(data.symbols);
@@ -37,7 +37,7 @@ export default function SymbolSettings() {
   const updateSymbolSetting = async (symbol: string, updates: Partial<SymbolConfig>) => {
     setUpdating(symbol);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://web-production-014c4.up.railway.app'}/monitored-symbols`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || ''}/monitored-symbols`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol, ...updates })
