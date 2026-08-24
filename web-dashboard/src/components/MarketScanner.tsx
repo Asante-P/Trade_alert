@@ -92,9 +92,9 @@ export default function MarketScanner() {
                   <span className="text-lg">{getTrendIcon(result.trend)}</span>
                 </div>
                 <div className="text-xs text-gray-400">
-                  ${result.currentPrice.toFixed(2)}
-                  <span className={`ml-2 ${parseFloat(result.priceChange) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {parseFloat(result.priceChange) >= 0 ? '+' : ''}{result.priceChange}%
+                  ${result.currentPrice?.toFixed(2) || 'N/A'}
+                  <span className={`ml-2 ${parseFloat(result.priceChange || '0') >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {parseFloat(result.priceChange || '0') >= 0 ? '+' : ''}{result.priceChange || '0'}%
                   </span>
                 </div>
               </div>
