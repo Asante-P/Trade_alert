@@ -194,54 +194,58 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
               Current Price: <span className="text-white">{rec.currentPrice?.toFixed(2) || 'N/A'}</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div>
-                <span className="text-gray-500">RSI:</span>{' '}
-                <span className={(rec.indicators.rsi || 0) < 30 ? 'text-green-400' : (rec.indicators.rsi || 0) > 70 ? 'text-red-400' : 'text-white'}>
-                  {rec.indicators.rsi?.toFixed(1) || 'N/A'}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500">ATR:</span>{' '}
-                <span className="text-white">{rec.indicators.atr?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">Trend:</span>{' '}
-                <span className={rec.marketStructure?.trend?.includes('BULLISH') ? 'text-green-400' : rec.marketStructure?.trend?.includes('BEARISH') ? 'text-red-400' : 'text-yellow-400'}>
-                  {rec.marketStructure?.trend || 'N/A'}
-                </span>
-              </div>
-            </div>
+            {rec.indicators && (
+              <>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">RSI:</span>{' '}
+                    <span className={(rec.indicators.rsi || 0) < 30 ? 'text-green-400' : (rec.indicators.rsi || 0) > 70 ? 'text-red-400' : 'text-white'}>
+                      {rec.indicators.rsi?.toFixed(1) || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">ATR:</span>{' '}
+                    <span className="text-white">{rec.indicators.atr?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Trend:</span>{' '}
+                    <span className={rec.marketStructure?.trend?.includes('BULLISH') ? 'text-green-400' : rec.marketStructure?.trend?.includes('BEARISH') ? 'text-red-400' : 'text-yellow-400'}>
+                      {rec.marketStructure?.trend || 'N/A'}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs mt-1">
-              <div>
-                <span className="text-gray-500">EMA Short:</span>{' '}
-                <span className="text-cyan-400">{rec.indicators.emaShort?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">EMA Medium:</span>{' '}
-                <span className="text-purple-400">{rec.indicators.emaMedium?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">EMA Long:</span>{' '}
-                <span className="text-pink-400">{rec.indicators.emaLong?.toFixed(2) || 'N/A'}</span>
-              </div>
-            </div>
+                <div className="grid grid-cols-3 gap-2 text-xs mt-1">
+                  <div>
+                    <span className="text-gray-500">EMA Short:</span>{' '}
+                    <span className="text-cyan-400">{rec.indicators.emaShort?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">EMA Medium:</span>{' '}
+                    <span className="text-purple-400">{rec.indicators.emaMedium?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">EMA Long:</span>{' '}
+                    <span className="text-pink-400">{rec.indicators.emaLong?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs mt-1">
-              <div>
-                <span className="text-gray-500">Support:</span>{' '}
-                <span className="text-blue-400">{rec.indicators.support?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">Pivot:</span>{' '}
-                <span className="text-purple-400">{rec.indicators.pivot?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">Resistance:</span>{' '}
-                <span className="text-orange-400">{rec.indicators.resistance?.toFixed(2) || 'N/A'}</span>
-              </div>
-            </div>
+                <div className="grid grid-cols-3 gap-2 text-xs mt-1">
+                  <div>
+                    <span className="text-gray-500">Support:</span>{' '}
+                    <span className="text-blue-400">{rec.indicators.support?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Pivot:</span>{' '}
+                    <span className="text-purple-400">{rec.indicators.pivot?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Resistance:</span>{' '}
+                    <span className="text-orange-400">{rec.indicators.resistance?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
