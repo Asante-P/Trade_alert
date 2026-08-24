@@ -71,16 +71,16 @@ export default function MTFDashboard({
             
             console.log('Supabase response:', { error, bosData });
             
-            if (!error && bosData && bosData.success && bosData.mtfTrends) {
+            if (!error && bosData && bosData.success && bosData.mtfTrends && Array.isArray(bosData.mtfTrends)) {
               // Use MTF trends from Supabase Pine Script
               console.log('Using Supabase MTF trends:', bosData.mtfTrends);
               const newTrends = bosData.mtfTrends.map((trend: any) => ({
-                timeframe: trend.timeframe,
-                bias: trend.bias as 'Bullish' | 'Bearish' | 'Neutral',
-                weight: trend.weight
+                timeframe: trend.timeframe || 'Unknown',
+                bias: (trend.bias || 'Neutral') as 'Bullish' | 'Bearish' | 'Neutral',
+                weight: typeof trend.weight === 'number' ? trend.weight : 1
               }));
               setTrends(newTrends);
-              setOverallBias(bosData.overallBias as 'Bullish' | 'Bearish' | 'Neutral');
+              setOverallBias((bosData.overallBias || 'Neutral') as 'Bullish' | 'Bearish' | 'Neutral');
               return; // Exit early if we got Supabase data
             } else {
               console.log('Supabase data not available or error, using fallback calculation');
