@@ -12,10 +12,11 @@ interface MLPredictionData {
     value?: number;
   }>;
   indicators: {
-    shortEMA: string | null;
-    longEMA: string | null;
-    rsi: string | null;
-    macd: string | null;
+    emaShort: number;
+    emaMedium: number;
+    emaLong: number;
+    rsi: number;
+    atr: number;
   };
 }
 
@@ -133,24 +134,22 @@ export default function MLPrediction({ symbol = 'XAUUSD' }: { symbol?: string })
       {/* Technical Indicators */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="bg-gray-800 rounded p-2 border border-gray-700">
-          <div className="text-xs text-gray-400">Short EMA</div>
-          <div className="text-sm font-semibold text-blue-400">{predictionData.indicators.shortEMA || 'N/A'}</div>
+          <div className="text-xs text-gray-400">EMA Short</div>
+          <div className="text-sm font-semibold text-blue-400">{predictionData.indicators.emaShort?.toFixed(2) || 'N/A'}</div>
         </div>
         <div className="bg-gray-800 rounded p-2 border border-gray-700">
-          <div className="text-xs text-gray-400">Long EMA</div>
-          <div className="text-sm font-semibold text-blue-400">{predictionData.indicators.longEMA || 'N/A'}</div>
+          <div className="text-xs text-gray-400">EMA Medium</div>
+          <div className="text-sm font-semibold text-blue-400">{predictionData.indicators.emaMedium?.toFixed(2) || 'N/A'}</div>
         </div>
         <div className="bg-gray-800 rounded p-2 border border-gray-700">
           <div className="text-xs text-gray-400">RSI</div>
-          <div className={`text-sm font-semibold ${predictionData.indicators.rsi && parseFloat(predictionData.indicators.rsi) > 70 ? 'text-red-400' : predictionData.indicators.rsi && parseFloat(predictionData.indicators.rsi) < 30 ? 'text-green-400' : 'text-blue-400'}`}>
-            {predictionData.indicators.rsi || 'N/A'}
+          <div className={`text-sm font-semibold ${predictionData.indicators.rsi > 70 ? 'text-red-400' : predictionData.indicators.rsi < 30 ? 'text-green-400' : 'text-blue-400'}`}>
+            {predictionData.indicators.rsi?.toFixed(1) || 'N/A'}
           </div>
         </div>
         <div className="bg-gray-800 rounded p-2 border border-gray-700">
-          <div className="text-xs text-gray-400">MACD</div>
-          <div className={`text-sm font-semibold ${predictionData.indicators.macd && parseFloat(predictionData.indicators.macd) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {predictionData.indicators.macd || 'N/A'}
-          </div>
+          <div className="text-xs text-gray-400">ATR</div>
+          <div className="text-sm font-semibold text-purple-400">{predictionData.indicators.atr?.toFixed(2) || 'N/A'}</div>
         </div>
       </div>
 
