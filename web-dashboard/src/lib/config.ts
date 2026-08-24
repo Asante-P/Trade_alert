@@ -5,4 +5,4 @@ export const config = {
   symbols: ['XAUUSD', 'EURUSD', 'BTCUSD', 'NAS100'],
   refreshInterval: 15000, // 15 seconds
   maxAlerts: 50
-};
+}; // Updated to remove Railway dependencies
