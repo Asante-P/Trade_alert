@@ -32,32 +32,17 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
     }
   }, [chartSettings.interval, onTimeframeChange]);
 
-  // Poll for live price from Yahoo Finance as fallback
+  // Poll for live price from backend API (not direct Yahoo Finance to avoid CORS)
   useEffect(() => {
     const fetchLivePrice = async () => {
       try {
-        const getYahooSymbol = (sym: string) => {
-          switch (sym.toUpperCase()) {
-            case 'XAUUSD': return 'GC=F';
-            case 'EURUSD': return 'EURUSD=X';
-            case 'BTCUSD': return 'BTC-USD';
-            case 'NAS100': return '^NDX';
-            default: return sym;
-          }
-        };
-
-        const yahooSymbol = getYahooSymbol(symbol);
-        const response = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1m&range=1d`
-        );
+        const response = await fetch(`/api/market-data/${symbol}?interval=1m&limit=1`);
         const data = await response.json();
-        const result = data.chart?.result?.[0];
         
-        if (result && result.meta) {
-          const price = result.meta.regularPrice || result.meta.lastClose;
-          if (price && price !== currentPrice) {
-            setCurrentPrice(price);
-            if (onPriceUpdate) onPriceUpdate(price);
+        if (data.success && data.currentPrice) {
+          if (data.currentPrice !== currentPrice) {
+            setCurrentPrice(data.currentPrice);
+            if (onPriceUpdate) onPriceUpdate(data.currentPrice);
           }
         }
       } catch (error) {
@@ -106,24 +91,7 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
           save_image: false,
           container_id: containerId,
           height: height,
-          // Advanced charting features
-          studies: [
-            chartSettings.showMA ? 'MASimple@tv-basicstudies' : '',
-            chartSettings.showEMA ? 'MAExp@tv-basicstudies' : '',
-            chartSettings.showVolume ? 'MASimple@tv-basicstudies' : '',
-          ].filter(Boolean),
-          // Drawing tools
-          drawings_access: { type: 'full', tools: [{ name: 'all' }] },
-          // Chart overlays
-          overlay: true,
-          // Additional features
           allow_symbol_change: false,
-          calendar: true,
-          hide_side_toolbar: !chartSettings.showSideToolbar,
-          details: true,
-          hotlist: false,
-          news: false,
-          show_widget_logo: false,
           disabled_features: [
             'header_symbol_search',
             'header_screenshot',
@@ -131,13 +99,6 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
             'header_settings',
             'header_interval',
             'header_resolutions',
-          ],
-          enabled_features: [
-            'use_localstorage_for_settings',
-            'header_chart_type',
-            'header_toolbar',
-            'drawing_tools',
-            'study_templates',
           ],
         });
       }
