@@ -302,7 +302,7 @@ const mlPredictor = new MLPredictor();
 async function fetchMarketData(symbol: string, limit: number = 100, interval: string = '15m') {
   const getYahooSymbol = (sym: string) => {
     switch (sym.toUpperCase()) {
-      case 'XAUUSD': return 'GC=F';
+      case 'XAUUSD': return 'XAUUSD=X'; // Use spot gold directly for more accurate live price
       case 'EURUSD': return 'EURUSD=X';
       case 'BTCUSD': return 'BTC-USD';
       case 'NAS100': return '^NDX';
