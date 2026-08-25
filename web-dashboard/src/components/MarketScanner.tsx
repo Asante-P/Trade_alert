@@ -80,7 +80,7 @@ export default function MarketScanner() {
       )}
 
       <div className="space-y-2">
-        {scanResults.map((result) => (
+        {scanResults && scanResults.length > 0 && scanResults.map((result) => (
           <div 
             key={result.symbol} 
             className={`bg-gray-800 rounded p-3 border ${result.enabled ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}

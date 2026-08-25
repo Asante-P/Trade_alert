@@ -156,27 +156,29 @@ export default function MLPrediction({ symbol = 'XAUUSD' }: { symbol?: string })
       )}
 
       {/* Signal Breakdown */}
-      <div className="border-t border-gray-700 pt-3">
-        <div className="text-xs text-gray-400 mb-2">Signal Analysis</div>
-        <div className="space-y-1">
-          {predictionData.signals.map((signal, index) => (
-            <div key={index} className="flex justify-between items-center text-xs">
-              <div className="flex items-center gap-2">
-                <span>{getSignalIcon(signal.direction)}</span>
-                <span className="text-gray-300">{signal.type}</span>
+      {predictionData.signals && predictionData.signals.length > 0 && (
+        <div className="border-t border-gray-700 pt-3">
+          <div className="text-xs text-gray-400 mb-2">Signal Analysis</div>
+          <div className="space-y-1">
+            {predictionData.signals.map((signal, index) => (
+              <div key={index} className="flex justify-between items-center text-xs">
+                <div className="flex items-center gap-2">
+                  <span>{getSignalIcon(signal.direction)}</span>
+                  <span className="text-gray-300">{signal.type}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={getStrengthColor(signal.strength)}>{signal.strength}</span>
+                  {signal.value !== undefined && (
+                    <span className="text-gray-500">{signal.value.toFixed(2)}</span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={getStrengthColor(signal.strength)}>{signal.strength}</span>
-                {signal.value !== undefined && (
-                  <span className="text-gray-500">{signal.value.toFixed(2)}</span>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {predictionData.signals.length === 0 && (
+      {predictionData.signals && predictionData.signals.length === 0 && (
         <div className="border-t border-gray-700 pt-3">
           <div className="text-xs text-gray-500 text-center">
             No strong signals detected
