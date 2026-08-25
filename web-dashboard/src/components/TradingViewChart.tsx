@@ -7,12 +7,14 @@ interface TradingViewChartProps {
   height?: number;
   onSymbolChange?: (symbol: string) => void;
   onTimeframeChange?: (timeframe: string) => void;
+  onPriceUpdate?: (price: number) => void;
 }
 
-export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange, onTimeframeChange }: TradingViewChartProps) {
+export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange, onTimeframeChange, onPriceUpdate }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string>('');
   const [isMounted, setIsMounted] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [chartSettings, setChartSettings] = useState({
     interval: '15',
     showDrawingTools: true,
@@ -29,6 +31,45 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
       onTimeframeChange(chartSettings.interval);
     }
   }, [chartSettings.interval, onTimeframeChange]);
+
+  // Poll for live price from Yahoo Finance as fallback
+  useEffect(() => {
+    const fetchLivePrice = async () => {
+      try {
+        const getYahooSymbol = (sym: string) => {
+          switch (sym.toUpperCase()) {
+            case 'XAUUSD': return 'GC=F';
+            case 'EURUSD': return 'EURUSD=X';
+            case 'BTCUSD': return 'BTC-USD';
+            case 'NAS100': return '^NDX';
+            default: return sym;
+          }
+        };
+
+        const yahooSymbol = getYahooSymbol(symbol);
+        const response = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1m&range=1d`
+        );
+        const data = await response.json();
+        const result = data.chart?.result?.[0];
+        
+        if (result && result.meta) {
+          const price = result.meta.regularPrice || result.meta.lastClose;
+          if (price && price !== currentPrice) {
+            setCurrentPrice(price);
+            if (onPriceUpdate) onPriceUpdate(price);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching live price:', error);
+      }
+    };
+
+    fetchLivePrice();
+    const interval = setInterval(fetchLivePrice, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [symbol, currentPrice, onPriceUpdate]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -73,30 +114,27 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
           ].filter(Boolean),
           // Drawing tools
           drawings_access: { type: 'full', tools: [{ name: 'all' }] },
-          // Custom indicators
-          custom_indicators_getter: () => {
-            return [];
-          },
           // Chart overlays
           overlay: true,
           // Additional features
-          allow_symbol_change: false, // Use dropdown selector instead to sync with other components
+          allow_symbol_change: false,
           calendar: true,
           hide_side_toolbar: !chartSettings.showSideToolbar,
           details: true,
-          hotlist: true,
-          news: ['headlines'],
+          hotlist: false,
+          news: false,
           show_widget_logo: false,
-          disabled_features: [],
-          enabled_features: [
-            'use_localstorage_for_settings',
+          disabled_features: [
             'header_symbol_search',
             'header_screenshot',
-            'header_chart_type',
             'header_compare',
             'header_settings',
             'header_interval',
             'header_resolutions',
+          ],
+          enabled_features: [
+            'use_localstorage_for_settings',
+            'header_chart_type',
             'header_toolbar',
             'drawing_tools',
             'study_templates',
