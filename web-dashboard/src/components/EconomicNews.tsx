@@ -212,7 +212,7 @@ export default function EconomicNews() {
               </div>
             )}
             
-            {newsEvents.map((event, index) => (
+            {newsEvents && newsEvents.length > 0 && newsEvents.map((event, index) => (
               <div key={index} className="bg-gray-800 rounded p-3">
                 <button
                   onClick={() => toggleEventExpansion(index)}

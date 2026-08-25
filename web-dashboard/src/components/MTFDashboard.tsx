@@ -257,7 +257,7 @@ export default function MTFDashboard({
           <span>Trend</span>
         </div>
         
-        {trends.map((trend, index) => (
+        {trends && trends.length > 0 && trends.map((trend, index) => (
           <div key={index} className="grid grid-cols-2 gap-2 items-center">
             <span className="text-white text-sm">{trend.timeframe}</span>
             <span className={`text-sm font-medium ${getBiasColor(trend.bias)}`}>

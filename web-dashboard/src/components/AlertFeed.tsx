@@ -92,7 +92,7 @@ export default function AlertFeed() {
         <span className="text-xs text-gray-400">{alerts.length} alerts</span>
       </div>
       
-      {alerts.length === 0 ? (
+      {(!alerts || alerts.length === 0) ? (
         <div className="text-gray-500 text-sm py-4 text-center">
           No alerts yet. Waiting for TradingView signals...
         </div>

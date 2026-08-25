@@ -169,7 +169,7 @@ export default function PerformanceMetrics() {
       </div>
 
       {/* Alert Types Breakdown */}
-      {Object.keys(performanceData.breakdown.alertTypes).length > 0 && (
+      {performanceData.breakdown && performanceData.breakdown.alertTypes && Object.keys(performanceData.breakdown.alertTypes).length > 0 && (
         <div className="border-t border-gray-700 pt-3">
           <div className="text-xs text-gray-400 mb-2">Alert Types</div>
           <div className="space-y-1">
@@ -184,7 +184,7 @@ export default function PerformanceMetrics() {
       )}
 
       {/* Symbol Breakdown */}
-      {Object.keys(performanceData.breakdown.symbolBreakdown).length > 1 && (
+      {performanceData.breakdown && performanceData.breakdown.symbolBreakdown && Object.keys(performanceData.breakdown.symbolBreakdown).length > 1 && (
         <div className="border-t border-gray-700 pt-3 mt-3">
           <div className="text-xs text-gray-400 mb-2">Symbol Breakdown</div>
           <div className="space-y-1">

@@ -88,7 +88,7 @@ export default function SymbolSettings() {
       </h3>
 
       <div className="space-y-2">
-        {symbols.map((symbolConfig) => (
+        {symbols && symbols.length > 0 && symbols.map((symbolConfig) => (
           <div key={symbolConfig.symbol} className="bg-gray-800 rounded p-3 border border-gray-700">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-semibold text-gray-300">{symbolConfig.symbol}</span>

@@ -136,7 +136,7 @@ export default function TradeRecommendations({ symbol = 'XAUUSD', multiSymbol = 
       </h3>
       
       <div className="space-y-3">
-        {recommendations.map((rec, index) => (
+        {recommendations && recommendations.length > 0 && recommendations.map((rec, index) => (
           <div key={`${rec.symbol}-${index}`} className="bg-gray-800 rounded p-3 border border-gray-700">
             <div className="flex justify-between items-start mb-2">
               <div>
