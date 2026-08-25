@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Simple in-memory cache
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds
+
 // TradeRecommender class (reused for consistency)
 class TradeRecommender {
   calculateRSI(data: number[], period: number = 14): number {
@@ -305,6 +309,13 @@ async function fetchMarketData(symbol: string, limit: number = 100, interval: st
     }
   };
 
+  const getAlternativeSymbol = (sym: string) => {
+    switch (sym.toUpperCase()) {
+      case 'XAUUSD': return 'XAUUSD=X';
+      default: return null;
+    }
+  };
+
   // Map interval to Yahoo Finance format
   const getYahooInterval = (intv: string) => {
     switch (intv) {
@@ -312,7 +323,7 @@ async function fetchMarketData(symbol: string, limit: number = 100, interval: st
       case '5': return '5m';
       case '15': return '15m';
       case '60': return '1h';
-      case '240': return '1d'; // Yahoo doesn't have 4h, use daily
+      case '240': return '1d';
       case 'D': return '1d';
       default: return '15m';
     }
@@ -336,13 +347,32 @@ async function fetchMarketData(symbol: string, limit: number = 100, interval: st
     const yahooInterval = getYahooInterval(interval);
     const range = getRange(interval);
     
-    const response = await fetch(
+    console.log(`MarketScan: Fetching ${symbol} -> ${yahooSymbol}, interval: ${yahooInterval}, range: ${range}`);
+    
+    let response = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${yahooInterval}&range=${range}`
     );
     
-    const data = await response.json();
-    const result = data.chart?.result?.[0];
+    let data = await response.json();
+    let result = data.chart?.result?.[0];
+    
+    // If primary symbol fails or returns stale data, try alternative for XAUUSD
+    if (!result || (symbol.toUpperCase() === 'XAUUSD' && result.meta?.lastClose < 4000)) {
+      const altSymbol = getAlternativeSymbol(symbol);
+      if (altSymbol) {
+        console.log(`MarketScan: Primary failed/stale, trying alternative: ${altSymbol}`);
+        response = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${altSymbol}?interval=${yahooInterval}&range=${range}`
+        );
+        data = await response.json();
+        result = data.chart?.result?.[0];
+      }
+    }
+    
     if (!result) throw new Error('No data from Yahoo Finance');
+    
+    const latestPrice = result.meta?.regularPrice || result.meta?.lastClose;
+    console.log(`MarketScan: Latest price for ${symbol}: ${latestPrice}`);
     
     const timestamp = result.timestamp || [];
     const quotes = result.indicators?.quote?.[0] || {};
@@ -381,6 +411,15 @@ const monitoredSymbols = [
 
 export async function GET(request: NextRequest) {
   try {
+    const cacheKey = 'market_scan_all';
+    const cached = cache.get(cacheKey);
+    
+    // Return cached data if still valid
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`Returning cached market scan results`);
+      return NextResponse.json(cached.data);
+    }
+    
     const scanResults = [];
     
     for (const symbolConfig of monitoredSymbols) {
@@ -429,11 +468,16 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    return NextResponse.json({ 
+    const responseData = { 
       success: true, 
       timestamp: new Date().toISOString(),
       results: scanResults 
-    });
+    };
+    
+    // Cache the response
+    cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+    
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Market scan error:', error);
     return NextResponse.json({ 
