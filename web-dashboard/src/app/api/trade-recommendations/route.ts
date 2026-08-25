@@ -255,7 +255,7 @@ class TradeRecommender {
 const tradeRecommender = new TradeRecommender();
 
 // Market data fetching
-async function fetchMarketData(symbol: string, limit: number = 100) {
+async function fetchMarketData(symbol: string, limit: number = 100, interval: string = '15m') {
   const getYahooSymbol = (sym: string) => {
     switch (sym.toUpperCase()) {
       case 'XAUUSD': return 'GC=F';
@@ -266,10 +266,39 @@ async function fetchMarketData(symbol: string, limit: number = 100) {
     }
   };
 
+  // Map interval to Yahoo Finance format
+  const getYahooInterval = (intv: string) => {
+    switch (intv) {
+      case '1': return '1m';
+      case '5': return '5m';
+      case '15': return '15m';
+      case '60': return '1h';
+      case '240': return '1d'; // Yahoo doesn't have 4h, use daily
+      case 'D': return '1d';
+      default: return '15m';
+    }
+  };
+
+  // Map range based on interval
+  const getRange = (intv: string) => {
+    switch (intv) {
+      case '1': return '5d';
+      case '5': return '1mo';
+      case '15': return '1mo';
+      case '60': return '3mo';
+      case '240': return '1y';
+      case 'D': return '2y';
+      default: return '1mo';
+    }
+  };
+
   try {
     const yahooSymbol = getYahooSymbol(symbol);
+    const yahooInterval = getYahooInterval(interval);
+    const range = getRange(interval);
+    
     const response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=15m&range=1d`
+      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${yahooInterval}&range=${range}`
     );
     
     const data = await response.json();
@@ -315,7 +344,7 @@ export async function GET(request: NextRequest) {
     
     for (const symbol of symbols) {
       try {
-        const marketData = await fetchMarketData(symbol, 100);
+        const marketData = await fetchMarketData(symbol, 100, timeframe);
         if (marketData.length > 0) {
           const recommendation = tradeRecommender.generateTradeRecommendation(symbol, marketData, timeframe);
           recommendations.push(recommendation);

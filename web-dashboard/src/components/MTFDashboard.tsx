@@ -28,6 +28,88 @@ function isMarketOpen() {
   return true;
 }
 
+// EMA calculation helper
+function calculateEMA(data: number[], period: number): number {
+  if (data.length < period) return data[data.length - 1] || 0;
+  
+  const k = 2 / (period + 1);
+  let ema = data[0];
+  
+  for (let i = 1; i < data.length; i++) {
+    ema = data[i] * k + ema * (1 - k);
+  }
+  
+  return ema;
+}
+
+// Enhanced bias calculation using multiple EMAs
+function calculateEnhancedBias(dataSlice: any[]): 'Bullish' | 'Bearish' | 'Neutral' {
+  console.log(`calculateEnhancedBias called with ${dataSlice.length} candles`);
+  
+  if (dataSlice.length < 20) {
+    console.log('Data slice too small, returning Neutral');
+    return 'Neutral';
+  }
+  
+  const closes = dataSlice.map((d: any) => d.close);
+  
+  // Use multiple EMAs like professional indicators (EMA 9, EMA 21, EMA 50)
+  const ema9 = calculateEMA(closes, Math.min(9, Math.floor(closes.length / 3)));
+  const ema21 = calculateEMA(closes, Math.min(21, Math.floor(closes.length / 2)));
+  const ema50 = calculateEMA(closes, Math.min(50, closes.length));
+  
+  const lastClose = closes[closes.length - 1];
+  
+  console.log(`Enhanced bias calculation: Close=${lastClose}, EMA9=${ema9}, EMA21=${ema21}, EMA50=${ema50}`);
+  
+  // Bullish conditions: price above EMAs and EMAs in correct order
+  const priceAboveShortEMA = lastClose > ema9;
+  const priceAboveMediumEMA = lastClose > ema21;
+  const priceAboveLongEMA = lastClose > ema50;
+  const emaBullishAlignment = ema9 > ema21 && ema21 > ema50;
+  
+  // Bearish conditions: price below EMAs and EMAs in correct order
+  const priceBelowShortEMA = lastClose < ema9;
+  const priceBelowMediumEMA = lastClose < ema21;
+  const priceBelowLongEMA = lastClose < ema50;
+  const emaBearishAlignment = ema9 < ema21 && ema21 < ema50;
+  
+  console.log(`Conditions:`, {
+    priceAboveShortEMA,
+    priceAboveMediumEMA,
+    priceAboveLongEMA,
+    emaBullishAlignment,
+    priceBelowShortEMA,
+    priceBelowMediumEMA,
+    priceBelowLongEMA,
+    emaBearishAlignment
+  });
+  
+  // Determine bias
+  if (priceAboveShortEMA && priceAboveMediumEMA && priceAboveLongEMA && emaBullishAlignment) {
+    console.log('Strong BULLISH signal');
+    return 'Bullish';
+  }
+  
+  if (priceBelowShortEMA && priceBelowMediumEMA && priceBelowLongEMA && emaBearishAlignment) {
+    console.log('Strong BEARISH signal');
+    return 'Bearish';
+  }
+  
+  if (priceAboveShortEMA && priceAboveMediumEMA) {
+    console.log('Moderate BULLISH signal');
+    return 'Bullish';
+  }
+  
+  if (priceBelowShortEMA && priceBelowMediumEMA) {
+    console.log('Moderate BEARISH signal');
+    return 'Bearish';
+  }
+  
+  console.log('NEUTRAL signal');
+  return 'Neutral';
+}
+
 export default function MTFDashboard({ 
   timeframes = defaultTimeframes,
   weights = defaultWeights,
@@ -53,6 +135,45 @@ export default function MTFDashboard({
         //   return;
         // }
         
+        // Fetch data for each timeframe with correct interval
+        const timeframeData: any = {};
+        
+        for (const tf of timeframes) {
+          const interval = tf === '15m' ? '15m' : tf === '1H' ? '1h' : tf === '4H' ? '1d' : '1d';
+          const response = await fetch(`/api/market-data/${symbol}?interval=${interval}`);
+          const data = await response.json();
+          
+          if (data.success && data.data && data.data.length > 20) {
+            timeframeData[tf] = data.data;
+          }
+        }
+        
+        // If we have data for all timeframes, calculate trends
+        if (Object.keys(timeframeData).length === timeframes.length) {
+          const newTrends = timeframes.map((tf) => {
+            const data = timeframeData[tf];
+            const bias = calculateEnhancedBias(data);
+            return {
+              timeframe: tf,
+              bias,
+              weight: weights[timeframes.indexOf(tf)]
+            };
+          });
+          
+          setTrends(newTrends);
+          
+          // Calculate overall bias
+          const bullishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bullish' ? t.weight : 0), 0);
+          const bearishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bearish' ? t.weight : 0), 0);
+          
+          if (bullishScore > bearishScore * 1.5) setOverallBias('Bullish');
+          else if (bearishScore > bullishScore * 1.5) setOverallBias('Bearish');
+          else setOverallBias('Neutral');
+          
+          return;
+        }
+        
+        // Fallback: Use single 15m data if multi-timeframe fails
         const response = await fetch(`/api/market-data/${symbol}`);
         const data = await response.json();
         
@@ -89,131 +210,27 @@ export default function MTFDashboard({
             console.error('Error calling Supabase for MTF:', supabaseError);
           }
           
-          // Fallback: Enhanced trend detection using multiple EMAs
-          const calculateEnhancedBias = (dataSlice: any[]) => {
-            console.log(`calculateEnhancedBias called with ${dataSlice.length} candles`);
-            
-            if (dataSlice.length < 20) {
-              console.log('Data slice too small, returning Neutral');
-              return 'Neutral';
-            }
-            
-            const closes = dataSlice.map((d: any) => d.close);
-            
-            // Use multiple EMAs like professional indicators (EMA 9, EMA 21, EMA 50)
-            const ema9 = calculateEMA(closes, Math.min(9, Math.floor(closes.length / 3)));
-            const ema21 = calculateEMA(closes, Math.min(21, Math.floor(closes.length / 2)));
-            const ema50 = calculateEMA(closes, Math.min(50, closes.length));
-            
-            const lastClose = closes[closes.length - 1];
-            
-            console.log(`Enhanced bias calculation: Close=${lastClose}, EMA9=${ema9}, EMA21=${ema21}, EMA50=${ema50}`);
-            
-            // Bullish conditions: price above EMAs and EMAs in correct order
-            const priceAboveShortEMA = lastClose > ema9;
-            const priceAboveMediumEMA = lastClose > ema21;
-            const priceAboveLongEMA = lastClose > ema50;
-            const emaBullishAlignment = ema9 > ema21 && ema21 > ema50;
-            
-            // Bearish conditions: price below EMAs and EMAs in correct order
-            const priceBelowShortEMA = lastClose < ema9;
-            const priceBelowMediumEMA = lastClose < ema21;
-            const priceBelowLongEMA = lastClose < ema50;
-            const emaBearishAlignment = ema9 < ema21 && ema21 < ema50;
-            
-            console.log(`Conditions:`, {
-              priceAboveShortEMA,
-              priceAboveMediumEMA,
-              priceAboveLongEMA,
-              emaBullishAlignment,
-              priceBelowShortEMA,
-              priceBelowMediumEMA,
-              priceBelowLongEMA,
-              emaBearishAlignment
-            });
-            
-            // Strong bullish: price above all EMAs and EMAs aligned bullish
-            if (priceAboveLongEMA && emaBullishAlignment) {
-              console.log('Strong BULLISH signal');
-              return 'Bullish';
-            }
-            
-            // Strong bearish: price below all EMAs and EMAs aligned bearish
-            if (priceBelowLongEMA && emaBearishAlignment) {
-              console.log('Strong BEARISH signal');
-              return 'Bearish';
-            }
-            
-            // Moderate bullish: price above medium EMA
-            if (priceAboveMediumEMA) {
-              console.log('Moderate BULLISH signal');
-              return 'Bullish';
-            }
-            
-            // Moderate bearish: price below medium EMA
-            if (priceBelowMediumEMA) {
-              console.log('Moderate BEARISH signal');
-              return 'Bearish';
-            }
-            
-            console.log('NEUTRAL signal - no conditions met');
-            return 'Neutral';
-          };
-          
-          // Helper function to calculate EMA
-          const calculateEMA = (prices: number[], period: number): number => {
-            if (prices.length < period) return prices[prices.length - 1];
-            
-            const multiplier = 2 / (period + 1);
-            let ema = prices[0];
-            
-            for (let i = 1; i < prices.length; i++) {
-              ema = (prices[i] - ema) * multiplier + ema;
-            }
-            
-            return ema;
-          };
-
-          // Calculate bias for each timeframe using different data slices
-          const newTrends = timeframes.map((tf, i) => {
-            let dataSlice;
-            
-            // Simulate different timeframe data by using different slices
-            switch (tf) {
-              case '15m':
-                dataSlice = marketData.slice(-30); // Last 30 candles
-                break;
-              case '1H':
-                dataSlice = marketData.slice(-50); // Last 50 candles (simulating 1H)
-                break;
-              case '4H':
-                dataSlice = marketData.slice(-70); // Last 70 candles (simulating 4H)
-                break;
-              case '1D':
-                dataSlice = marketData.slice(-90); // Last 90 candles (simulating 1D)
-                break;
-              default:
-                dataSlice = marketData.slice(-30);
-            }
-            
-            console.log(`Timeframe ${tf}: data slice length ${dataSlice.length}`);
-            
+          // Fallback: Use the same multi-timeframe calculation
+          const newTrends = timeframes.map((tf) => {
+            const interval = tf === '15m' ? '15m' : tf === '1H' ? '1h' : tf === '4H' ? '1d' : '1d';
+            const dataSlice = timeframeData[tf] || marketData.slice(0, 30);
+            const bias = calculateEnhancedBias(dataSlice);
             return {
               timeframe: tf,
-              bias: calculateEnhancedBias(dataSlice) as 'Bullish' | 'Bearish' | 'Neutral',
-              weight: weights[i]
+              bias,
+              weight: weights[timeframes.indexOf(tf)]
             };
           });
           
           setTrends(newTrends);
           
           // Calculate overall bias
-          const weightedSum = newTrends.reduce((sum, trend) => {
-            const biasValue = trend.bias === 'Bullish' ? 1 : trend.bias === 'Bearish' ? -1 : 0;
-            return sum + (biasValue * trend.weight);
-          }, 0);
+          const bullishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bullish' ? t.weight : 0), 0);
+          const bearishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bearish' ? t.weight : 0), 0);
           
-          setOverallBias(weightedSum > 0 ? 'Bullish' : weightedSum < 0 ? 'Bearish' : 'Neutral');
+          if (bullishScore > bearishScore * 1.5) setOverallBias('Bullish');
+          else if (bearishScore > bullishScore * 1.5) setOverallBias('Bearish');
+          else setOverallBias('Neutral');
         }
       } catch (error) {
         console.error('Error fetching trend data:', error);
@@ -221,7 +238,7 @@ export default function MTFDashboard({
     };
 
     fetchTrendData();
-    const interval = setInterval(fetchTrendData, 120000); // Update every 2 minutes instead of 30 seconds
+    const interval = setInterval(fetchTrendData, 120000); // Update every 2 minutes
     
     return () => clearInterval(interval);
   }, [symbol, timeframes, weights]);
