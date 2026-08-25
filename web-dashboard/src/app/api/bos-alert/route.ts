@@ -36,6 +36,30 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
+    // Send ntfy notification
+    try {
+      const ntfyTopic = process.env.NTFY_TOPIC || 'trade-alerts';
+      const ntfyUrl = process.env.NTFY_URL || 'https://ntfy.sh';
+      const notificationTitle = `${type} Alert - ${symbol}`;
+      const notificationBody = `${direction.toUpperCase()} ${type} at ${price}`;
+      
+      await fetch(`${ntfyUrl}/${ntfyTopic}`, {
+        method: 'POST',
+        headers: {
+          'Title': notificationTitle,
+          'Priority': 'high',
+          'Tags': type.toLowerCase().replace('_', '-'),
+          'Content-Type': 'text/plain'
+        },
+        body: notificationBody
+      });
+      
+      console.log('ntfy notification sent');
+    } catch (ntfyError) {
+      console.error('Error sending ntfy notification:', ntfyError);
+      // Don't fail the request if notification fails
+    }
+
     return NextResponse.json({ 
       success: true,
       alert
