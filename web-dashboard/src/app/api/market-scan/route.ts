@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Simple in-memory cache
 const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 30000; // 30 seconds
+const CACHE_TTL = 5000; // 5 seconds for live prices
 
 // TradeRecommender class (reused for consistency)
 class TradeRecommender {
@@ -138,7 +138,8 @@ class TradeRecommender {
     }
 
     const timeframeParams = this.getTimeframeParameters(timeframe);
-    const currentPrice = marketData[marketData.length - 1].close;
+    // Use the latest price from meta data if available, otherwise last candle close
+    const currentPrice = marketData[marketData.length - 1].currentPrice || marketData[marketData.length - 1].close;
     const closes = marketData.map((d: any) => d.close);
     
     const rsi = this.calculateRSI(closes, timeframeParams.rsiPeriod);
@@ -389,7 +390,8 @@ async function fetchMarketData(symbol: string, limit: number = 100, interval: st
           open: open[i],
           high: high[i],
           low: low[i],
-          close: close[i]
+          close: close[i],
+          currentPrice: i === timestamp.length - 1 ? latestPrice : close[i]
         });
       }
     }
