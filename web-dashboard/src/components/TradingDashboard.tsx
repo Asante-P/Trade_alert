@@ -112,7 +112,7 @@ export default function TradingDashboard() {
               onChange={(e) => handleSymbolChange(e.target.value)}
               className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
             >
-              {symbols.map(symbol => (
+              {symbols && symbols.length > 0 && symbols.map(symbol => (
                 <option key={symbol} value={symbol}>{symbol}</option>
               ))}
             </select>
@@ -170,7 +170,7 @@ export default function TradingDashboard() {
               </div>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {realtimeAlerts.map((alert) => (
+                {realtimeAlerts && realtimeAlerts.length > 0 && realtimeAlerts.map((alert) => (
                   <div key={alert.id} className="bg-gray-800 rounded p-2 border border-gray-700">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-semibold text-gray-300">{alert.type}</span>

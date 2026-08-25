@@ -143,7 +143,7 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
           
           {/* Interval Selector */}
           <div className="flex items-center gap-1">
-            {intervals.map((interval) => (
+            {intervals && intervals.length > 0 && intervals.map((interval) => (
               <button
                 key={interval}
                 onClick={() => setChartSettings(prev => ({ ...prev, interval }))}
