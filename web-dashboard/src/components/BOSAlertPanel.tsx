@@ -14,7 +14,13 @@ export default function BOSAlertPanel() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ symbol: 'XAUUSD' }),
+        body: JSON.stringify({ 
+          symbol: 'XAUUSD',
+          type: 'BOS',
+          direction: 'bullish',
+          price: 4650.00,
+          details: { timeframe: '15m' }
+        }),
       });
       
       const data = await response.json();
