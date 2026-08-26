@@ -9,30 +9,52 @@ export default function BOSAlertPanel() {
   const triggerTestAlert = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/bos-alert', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          symbol: 'XAUUSD',
-          type: 'BOS',
-          direction: 'bullish',
-          price: 4650.00,
-          details: { timeframe: '15m' }
-        }),
-      });
-      
+      const response = await fetch('/api/bos-monitor?symbols=XAUUSD&testOnly=true');
       const data = await response.json();
       
-      if (data.success) {
+      if (data.success && data.results.length > 0) {
+        const lastBOS = data.results[0];
+        
+        // Send the detected BOS as a real alert
+        const alertResponse = await fetch('/api/bos-alert', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            symbol: lastBOS.symbol,
+            type: 'BOS',
+            direction: lastBOS.direction,
+            price: lastBOS.price,
+            details: { 
+              timeframe: '15m',
+              pivotPrice: lastBOS.pivotPrice,
+              detectionMethod: 'automated'
+            }
+          }),
+        });
+        
+        const alertData = await alertResponse.json();
+        
+        if (alertData.success) {
+          setLastAlert({
+            timestamp: new Date().toISOString(),
+            message: `Test BOS alert sent: ${lastBOS.direction.toUpperCase()} ${lastBOS.symbol} at ${lastBOS.price}`,
+            details: lastBOS
+          });
+        }
+      } else {
         setLastAlert({
           timestamp: new Date().toISOString(),
-          message: 'Test BOS alert sent successfully'
+          message: 'No BOS detected in recent data'
         });
       }
     } catch (error) {
       console.error('Error triggering BOS alert:', error);
+      setLastAlert({
+        timestamp: new Date().toISOString(),
+        message: 'Error detecting BOS: ' + (error instanceof Error ? error.message : 'Unknown error')
+      });
     } finally {
       setIsLoading(false);
     }

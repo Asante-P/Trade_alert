@@ -229,6 +229,7 @@ export async function GET(request: NextRequest) {
     const symbols = symbolsParam.split(',');
     const swingLen = parseInt(searchParams.get('swingLen') || '10');
     const bosLen = parseInt(searchParams.get('bosLen') || '10');
+    const testOnly = searchParams.get('testOnly') === 'true'; // If true, only detect but don't store/notify
     
     console.log(`Starting BOS monitor for symbols: ${symbols.join(', ')}`);
     
@@ -247,25 +248,43 @@ export async function GET(request: NextRequest) {
         const signals = detectBOS(candles, pivots, swingLen, bosLen);
         console.log(`${symbol}: Found ${signals.length} BOS signals`);
         
-        // Process signals
-        for (const signal of signals) {
-          // Check if this is a recent alert (avoid duplicates)
-          const isRecent = await isRecentAlert(symbol, signal.type, signal.price, 30);
-          
-          if (!isRecent) {
-            // Store in Supabase
-            await storeAlertInSupabase(symbol, 'BOS', signal.type, signal.price);
+        // Get the most recent signal
+        const lastSignal = signals.length > 0 ? signals[signals.length - 1] : null;
+        
+        // Process signals (unless test only mode)
+        if (!testOnly) {
+          for (const signal of signals) {
+            // Check if this is a recent alert (avoid duplicates)
+            const isRecent = await isRecentAlert(symbol, signal.type, signal.price, 30);
             
-            // Send ntfy notification
-            await sendNtfyNotification(symbol, 'BOS', signal.type, signal.price);
-            
+            if (!isRecent) {
+              // Store in Supabase
+              await storeAlertInSupabase(symbol, 'BOS', signal.type, signal.price);
+              
+              // Send ntfy notification
+              await sendNtfyNotification(symbol, 'BOS', signal.type, signal.price);
+              
+              results.push({
+                symbol,
+                type: 'BOS',
+                direction: signal.type,
+                price: signal.price,
+                pivotPrice: signal.pivotPrice,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+        } else {
+          // Test mode: return the last detected BOS
+          if (lastSignal) {
             results.push({
               symbol,
               type: 'BOS',
-              direction: signal.type,
-              price: signal.price,
-              pivotPrice: signal.pivotPrice,
-              timestamp: new Date().toISOString()
+              direction: lastSignal.type,
+              price: lastSignal.price,
+              pivotPrice: lastSignal.pivotPrice,
+              timestamp: new Date().toISOString(),
+              testMode: true
             });
           }
         }
