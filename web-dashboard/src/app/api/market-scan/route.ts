@@ -4,6 +4,74 @@ import { NextRequest, NextResponse } from 'next/server';
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5000; // 5 seconds for live prices
 
+// Twelve Data API
+const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
+
+// Symbol mapping for Twelve Data
+const getTwelveDataSymbol = (sym: string) => {
+  switch (sym.toUpperCase()) {
+    case 'XAUUSD': return 'XAU/USD';
+    case 'EURUSD': return 'EUR/USD';
+    case 'BTCUSD': return 'BTC/USD';
+    case 'NAS100': return 'US100';
+    default: return sym;
+  }
+};
+
+// Map interval to Twelve Data format
+const getTwelveDataInterval = (intv: string) => {
+  switch (intv) {
+    case '1': return '1min';
+    case '5': return '5min';
+    case '15': return '15min';
+    case '60': return '1h';
+    case '240': return '4h';
+    case 'D': return '1day';
+    default: return '15min';
+  }
+};
+
+// Fetch from Twelve Data API
+async function fetchFromTwelveData(symbol: string, interval: string, limit: number) {
+  if (!TWELVE_DATA_API_KEY) {
+    throw new Error('TWELVE_DATA_API_KEY not configured');
+  }
+
+  const tdSymbol = getTwelveDataSymbol(symbol);
+  const tdInterval = getTwelveDataInterval(interval);
+  
+  console.log(`MarketScan: Fetching from Twelve Data: ${symbol} -> ${tdSymbol}, interval: ${tdInterval}`);
+  
+  const response = await fetch(
+    `https://api.twelvedata.com/time_series?symbol=${tdSymbol}&interval=${tdInterval}&outputsize=${limit}&apikey=${TWELVE_DATA_API_KEY}`
+  );
+  
+  const data = await response.json();
+  
+  if (data.status === 'error') {
+    throw new Error(`Twelve Data error: ${data.message}`);
+  }
+  
+  if (!data.values || data.values.length === 0) {
+    throw new Error('No data from Twelve Data');
+  }
+  
+  // Convert Twelve Data format to our candle format
+  const candles = data.values.map((v: any) => ({
+    time: new Date(v.datetime).getTime() / 1000,
+    open: parseFloat(v.open),
+    high: parseFloat(v.high),
+    low: parseFloat(v.low),
+    close: parseFloat(v.close),
+    currentPrice: parseFloat(v.close)
+  })).reverse(); // Twelve Data returns newest first, we want oldest first
+  
+  const latestPrice = candles[candles.length - 1].currentPrice;
+  console.log(`MarketScan: Twelve Data latest price for ${symbol}: ${latestPrice}`);
+  
+  return { candles, latestPrice };
+}
+
 // TradeRecommender class (reused for consistency)
 class TradeRecommender {
   calculateRSI(data: number[], period: number = 14): number {
@@ -300,106 +368,118 @@ const mlPredictor = new MLPredictor();
 
 // Market data fetching
 async function fetchMarketData(symbol: string, limit: number = 100, interval: string = '15m') {
-  const getYahooSymbol = (sym: string) => {
-    switch (sym.toUpperCase()) {
-      case 'XAUUSD': return 'XAUUSD=X'; // Use spot gold directly for more accurate live price
-      case 'EURUSD': return 'EURUSD=X';
-      case 'BTCUSD': return 'BTC-USD';
-      case 'NAS100': return '^NDX';
-      default: return sym;
-    }
-  };
-
-  const getAlternativeSymbol = (sym: string) => {
-    switch (sym.toUpperCase()) {
-      case 'XAUUSD': return 'XAUUSD=X';
-      default: return null;
-    }
-  };
-
-  // Map interval to Yahoo Finance format
-  const getYahooInterval = (intv: string) => {
-    switch (intv) {
-      case '1': return '1m';
-      case '5': return '5m';
-      case '15': return '15m';
-      case '60': return '1h';
-      case '240': return '1d';
-      case 'D': return '1d';
-      default: return '15m';
-    }
-  };
-
-  // Map range based on interval
-  const getRange = (intv: string) => {
-    switch (intv) {
-      case '1': return '5d';
-      case '5': return '1mo';
-      case '15': return '1mo';
-      case '60': return '3mo';
-      case '240': return '1y';
-      case 'D': return '2y';
-      default: return '1mo';
-    }
-  };
-
+  // Try Twelve Data first
   try {
-    const yahooSymbol = getYahooSymbol(symbol);
-    const yahooInterval = getYahooInterval(interval);
-    const range = getRange(interval);
-    
-    console.log(`MarketScan: Fetching ${symbol} -> ${yahooSymbol}, interval: ${yahooInterval}, range: ${range}`);
-    
-    let response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${yahooInterval}&range=${range}`
-    );
-    
-    let data = await response.json();
-    let result = data.chart?.result?.[0];
-    
-    // If primary symbol fails or returns stale data, try alternative for XAUUSD
-    if (!result || (symbol.toUpperCase() === 'XAUUSD' && result.meta?.lastClose < 4000)) {
-      const altSymbol = getAlternativeSymbol(symbol);
-      if (altSymbol) {
-        console.log(`MarketScan: Primary failed/stale, trying alternative: ${altSymbol}`);
-        response = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${altSymbol}?interval=${yahooInterval}&range=${range}`
-        );
-        data = await response.json();
-        result = data.chart?.result?.[0];
-      }
-    }
-    
-    if (!result) throw new Error('No data from Yahoo Finance');
-    
-    const latestPrice = result.meta?.regularPrice || result.meta?.lastClose;
-    console.log(`MarketScan: Latest price for ${symbol}: ${latestPrice}`);
-    
-    const timestamp = result.timestamp || [];
-    const quotes = result.indicators?.quote?.[0] || {};
-    const open = quotes.open || [];
-    const high = quotes.high || [];
-    const low = quotes.low || [];
-    const close = quotes.close || [];
-    
-    const candles = [];
-    for (let i = 0; i < timestamp.length && i < limit; i++) {
-      if (open[i] != null && high[i] != null && low[i] != null && close[i] != null) {
-        candles.push({
-          time: timestamp[i],
-          open: open[i],
-          high: high[i],
-          low: low[i],
-          close: close[i],
-          currentPrice: i === timestamp.length - 1 ? latestPrice : close[i]
-        });
-      }
-    }
-    
+    const { candles, latestPrice } = await fetchFromTwelveData(symbol, interval, limit);
     return candles;
-  } catch (error) {
-    console.error('Market data fetch error:', error);
-    return [];
+  } catch (twelveDataError) {
+    console.error('MarketScan: Twelve Data error, falling back to Yahoo Finance:', twelveDataError);
+    
+    // Fallback to Yahoo Finance
+    const getYahooSymbol = (sym: string) => {
+      switch (sym.toUpperCase()) {
+        case 'XAUUSD': return 'XAUUSD=X'; // Use spot gold directly for more accurate live price
+        case 'EURUSD': return 'EURUSD=X';
+        case 'BTCUSD': return 'BTC-USD';
+        case 'NAS100': return '^NDX';
+        default: return sym;
+      }
+    };
+
+    const getAlternativeSymbol = (sym: string) => {
+      switch (sym.toUpperCase()) {
+        case 'XAUUSD': return 'XAUUSD=X';
+        case 'BTCUSD': return 'BTCUSD=X'; // Try forex-style symbol for BTC
+        default: return null;
+      }
+    };
+
+    // Map interval to Yahoo Finance format
+    const getYahooInterval = (intv: string) => {
+      switch (intv) {
+        case '1': return '1m';
+        case '5': return '5m';
+        case '15': return '15m';
+        case '60': return '1h';
+        case '240': return '1d';
+        case 'D': return '1d';
+        default: return '15m';
+      }
+    };
+
+    // Map range based on interval
+    const getRange = (intv: string) => {
+      switch (intv) {
+        case '1': return '5d';
+        case '5': return '1mo';
+        case '15': return '1mo';
+        case '60': return '3mo';
+        case '240': return '1y';
+        case 'D': return '2y';
+        default: return '1mo';
+      }
+    };
+
+    try {
+      const yahooSymbol = getYahooSymbol(symbol);
+      const yahooInterval = getYahooInterval(interval);
+      const range = getRange(interval);
+      
+      console.log(`MarketScan: Fetching from Yahoo Finance (fallback): ${symbol} -> ${yahooSymbol}, interval: ${yahooInterval}, range: ${range}`);
+      
+      let response = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${yahooInterval}&range=${range}`
+      );
+      
+      let data = await response.json();
+      let result = data.chart?.result?.[0];
+      
+      // If primary symbol fails or returns stale data, try alternative
+      if (!result || 
+          (symbol.toUpperCase() === 'XAUUSD' && result.meta?.lastClose < 4000) ||
+          (symbol.toUpperCase() === 'BTCUSD' && result.meta?.lastClose < 70000)) {
+        const altSymbol = getAlternativeSymbol(symbol);
+        if (altSymbol) {
+          console.log(`MarketScan: Primary failed/stale, trying alternative: ${altSymbol}`);
+          response = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${altSymbol}?interval=${yahooInterval}&range=${range}`
+          );
+          data = await response.json();
+          result = data.chart?.result?.[0];
+        }
+      }
+      
+      if (!result) throw new Error('No data from Yahoo Finance');
+      
+      const latestPrice = result.meta?.regularPrice || result.meta?.lastClose;
+      console.log(`MarketScan: Yahoo Finance latest price for ${symbol}: ${latestPrice}`);
+      
+      const timestamp = result.timestamp || [];
+      const quotes = result.indicators?.quote?.[0] || {};
+      const open = quotes.open || [];
+      const high = quotes.high || [];
+      const low = quotes.low || [];
+      const close = quotes.close || [];
+      
+      const candles = [];
+      for (let i = 0; i < timestamp.length && i < limit; i++) {
+        if (open[i] != null && high[i] != null && low[i] != null && close[i] != null) {
+          candles.push({
+            time: timestamp[i],
+            open: open[i],
+            high: high[i],
+            low: low[i],
+            close: close[i],
+            currentPrice: i === timestamp.length - 1 ? latestPrice : close[i]
+          });
+        }
+      }
+      
+      return candles;
+    } catch (error) {
+      console.error('MarketScan: Yahoo Finance fallback also failed:', error);
+      return [];
+    }
   }
 }
 
