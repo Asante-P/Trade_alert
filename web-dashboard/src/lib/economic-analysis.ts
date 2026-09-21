@@ -1,6 +1,8 @@
 // Economic Analysis Library
 // Integrates economic indicators into trading decisions
 
+import { realEconomicDataService } from './real-economic-data';
+
 export interface EconomicIndicator {
   name: string;
   value: number;
@@ -106,29 +108,41 @@ export class EconomicAnalyzer {
   }
   
   // Get upcoming high-impact events
-  getUpcomingHighImpactEvents(): EconomicIndicator[] {
-    // This would typically come from an API
-    // For now, return sample data
-    return [
-      {
-        name: 'Non-Farm Payrolls',
-        value: 200,
-        previous: 175,
-        forecast: 190,
-        impact: 'high',
-        currency: 'USD',
-        timestamp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
-      },
-      {
-        name: 'CPI',
-        value: 3.2,
-        previous: 3.1,
-        forecast: 3.1,
-        impact: 'high',
-        currency: 'USD',
-        timestamp: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
-      }
-    ];
+  async getUpcomingHighImpactEvents(): Promise<EconomicIndicator[]> {
+    try {
+      const snapshot = await realEconomicDataService.getEconomicSnapshot();
+      
+      // Filter for high-impact events and upcoming ones
+      const upcomingEvents = snapshot.indicators.filter(ind => 
+        ind.impact === 'high' && ind.timestamp > new Date()
+      );
+      
+      return upcomingEvents.slice(0, 10); // Return top 10 upcoming events
+    } catch (error) {
+      console.error('Error fetching real economic data, using fallback:', error);
+      
+      // Fallback to sample data
+      return [
+        {
+          name: 'Non-Farm Payrolls',
+          value: 200,
+          previous: 175,
+          forecast: 190,
+          impact: 'high',
+          currency: 'USD',
+          timestamp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+        },
+        {
+          name: 'CPI',
+          value: 3.2,
+          previous: 3.1,
+          forecast: 3.1,
+          impact: 'high',
+          currency: 'USD',
+          timestamp: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+        }
+      ];
+    }
   }
   
   // Calculate market sentiment based on economic data

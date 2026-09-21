@@ -560,7 +560,7 @@ export async function GET(request: NextRequest) {
         const analysis = await analyzer.analyzeSymbolMultiTimeframe(symbol);
         
         // Integrate economic analysis
-        const economicIndicators = economicAnalyzer.getUpcomingHighImpactEvents();
+        const economicIndicators = await economicAnalyzer.getUpcomingHighImpactEvents();
         const economicImpact = economicAnalyzer.analyzeEconomicImpact(economicIndicators, symbol);
         
         // Integrate ML prediction using the 15m timeframe data

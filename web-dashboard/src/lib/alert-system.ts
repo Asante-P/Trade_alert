@@ -1,6 +1,8 @@
 // Alert System for Trading Opportunities
 // Comprehensive alert management with multiple notification channels
 
+import { notificationService } from './notification-service';
+
 export interface AlertCondition {
   type: 'price' | 'indicator' | 'pattern' | 'risk' | 'economic';
   symbol: string;
@@ -261,49 +263,14 @@ export class AlertSystem {
 
   // Send notifications through configured channels
   private async sendNotifications(alert: TradingAlert) {
-    const notifications = [];
-    
-    if (this.config.channels.push) {
-      notifications.push(this.sendPushNotification(alert));
-    }
-    
-    if (this.config.channels.email) {
-      notifications.push(this.sendEmailNotification(alert));
-    }
-    
-    if (this.config.channels.webhook) {
-      notifications.push(this.sendWebhookNotification(alert));
-    }
-    
-    await Promise.allSettled(notifications);
-  }
+    const message = {
+      subject: `Trade Alert: ${alert.symbol}`,
+      body: alert.message,
+      priority: alert.priority,
+      channels: alert.channels
+    };
 
-  // Send push notification (placeholder)
-  private async sendPushNotification(alert: TradingAlert) {
-    console.log(`[PUSH] ${alert.priority.toUpperCase()}: ${alert.message}`);
-    // In production, integrate with push notification service
-  }
-
-  // Send email notification (placeholder)
-  private async sendEmailNotification(alert: TradingAlert) {
-    console.log(`[EMAIL] ${alert.priority.toUpperCase()}: ${alert.message}`);
-    // In production, integrate with email service
-  }
-
-  // Send webhook notification (placeholder)
-  private async sendWebhookNotification(alert: TradingAlert) {
-    const webhookUrl = process.env.ALERT_WEBHOOK_URL;
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(alert)
-        });
-      } catch (error) {
-        console.error('Webhook notification failed:', error);
-      }
-    }
+    await notificationService.sendNotification(message, alert);
   }
 
   // Generate unique alert ID
