@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 // Simple in-memory cache
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -213,7 +213,7 @@ class TradeRecommender {
     const rsi = this.calculateRSI(closes, timeframeParams.rsiPeriod);
     const atr = this.calculateATR(marketData, timeframeParams.atrPeriod);
     const { support, resistance } = this.findSupportResistance(marketData, timeframeParams.supportResistancePeriod);
-    const { pivot, r1, r2, s1, s2 } = this.calculatePivotPoints(marketData);
+    const { pivot, r1, s1 } = this.calculatePivotPoints(marketData);
     const marketStructure = this.analyzeMarketStructure(marketData, timeframeParams.structurePeriod);
     
     const emaShort = this.calculateEMA(closes, timeframeParams.emaShort);
@@ -370,7 +370,7 @@ const mlPredictor = new MLPredictor();
 async function fetchMarketData(symbol: string, limit: number = 100, interval: string = '15m') {
   // Try Twelve Data first
   try {
-    const { candles, latestPrice } = await fetchFromTwelveData(symbol, interval, limit);
+    const { candles } = await fetchFromTwelveData(symbol, interval, limit);
     return candles;
   } catch (twelveDataError) {
     console.error('MarketScan: Twelve Data error, falling back to Yahoo Finance:', twelveDataError);
@@ -491,7 +491,7 @@ const monitoredSymbols = [
   { symbol: 'NAS100', enabled: true }
 ];
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const cacheKey = 'market_scan_all';
     const cached = cache.get(cacheKey);

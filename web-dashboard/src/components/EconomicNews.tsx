@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { analyzeTradingImpact, TradingImpact } from '@/lib/economic-events';
 
 interface NewsEvent {

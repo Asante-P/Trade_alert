@@ -506,9 +506,9 @@ class TechnicalAnalyzer {
     }
     
     // Use the most recent price from 15m timeframe for entry calculations
-    const tf15m = timeframeResults.find(r => r.timeframe === '15m');
-    const currentPrice = tf15m?.currentPrice || 0;
-    const atr = tf15m?.indicators?.atr || 0;
+    const tf15m = timeframeResults.find(r => r.timeframe === '15m' && !r.error);
+    const currentPrice = tf15m && 'currentPrice' in tf15m ? tf15m.currentPrice : 0;
+    const atr = tf15m && 'indicators' in tf15m && tf15m.indicators ? tf15m.indicators.atr || 0 : 0;
     
     const stopLoss = compositeRecommendation.includes('BUY') ? 
       currentPrice - (atr * 1.5) : 
@@ -533,8 +533,8 @@ class TechnicalAnalyzer {
       riskRewardRatio: parseFloat(riskReward.toFixed(2)),
       confluence,
       timeframeResults,
-      indicators: tf15m?.indicators || {},
-      marketStructure: tf15m?.marketStructure || {}
+      indicators: tf15m && 'indicators' in tf15m ? tf15m.indicators : {},
+      marketStructure: tf15m && 'marketStructure' in tf15m ? tf15m.marketStructure : {}
     };
   }
 }

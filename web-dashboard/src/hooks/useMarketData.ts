@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient, ApiError } from '@/lib/api';
-import type { MarketCandle, MarketDataResponse } from '@/types';
+import type { MarketCandle } from '@/types';
 
 interface UseMarketDataResult {
   data: MarketCandle[] | null;
@@ -56,6 +56,7 @@ export function useMarketData({
     } finally {
       setLoading(false);
     }
+    return;
   }, [symbol, interval, limit, enabled]);
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function useMarketData({
       const intervalId = setInterval(fetchData, refreshInterval);
       return () => clearInterval(intervalId);
     }
+    return;
   }, [fetchData, refreshInterval]);
 
   return { data, loading, error, refetch: fetchData };

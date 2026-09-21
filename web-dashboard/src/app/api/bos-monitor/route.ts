@@ -85,7 +85,7 @@ function calculatePivots(candles: any[], swingLen: number = 10) {
 }
 
 // Detect BOS (Break of Structure)
-function detectBOS(candles: any[], pivots: any[], swingLen: number = 10, bosLen: number = 10) {
+function detectBOS(candles: any[], pivots: any[], bosLen: number = 10) {
   const signals: { type: 'bullish' | 'bearish'; price: number; index: number; pivotPrice: number }[] = [];
   
   let lastPivotHigh: { price: number; index: number } | null = null;
@@ -139,7 +139,7 @@ function detectBOS(candles: any[], pivots: any[], swingLen: number = 10, bosLen:
 }
 
 // Send ntfy notification
-async function sendNtfyNotification(symbol: string, type: string, direction: string, price: number) {
+async function sendNtfyNotification(symbol: string, direction: string, price: number) {
   try {
     const ntfyTopic = process.env.NTFY_TOPIC || 'trade-alerts';
     const ntfyUrl = process.env.NTFY_URL || 'https://ntfy.sh';
@@ -164,7 +164,7 @@ async function sendNtfyNotification(symbol: string, type: string, direction: str
 }
 
 // Store alert in Supabase
-async function storeAlertInSupabase(symbol: string, type: string, direction: string, price: number) {
+async function storeAlertInSupabase(symbol: string, direction: string, price: number) {
   try {
     const { error } = await supabase
       .from('alerts')
@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
         console.log(`${symbol}: Found ${pivots.length} pivots`);
         
         // Detect BOS
-        const signals = detectBOS(candles, pivots, swingLen, bosLen);
+        const signals = detectBOS(candles, pivots, bosLen);
         console.log(`${symbol}: Found ${signals.length} BOS signals`);
         
         // Get the most recent signal
@@ -259,10 +259,10 @@ export async function GET(request: NextRequest) {
             
             if (!isRecent) {
               // Store in Supabase
-              await storeAlertInSupabase(symbol, 'BOS', signal.type, signal.price);
+              await storeAlertInSupabase(symbol, signal.type, signal.price);
               
               // Send ntfy notification
-              await sendNtfyNotification(symbol, 'BOS', signal.type, signal.price);
+              await sendNtfyNotification(symbol, signal.type, signal.price);
               
               results.push({
                 symbol,

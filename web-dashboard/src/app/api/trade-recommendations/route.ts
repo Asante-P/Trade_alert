@@ -217,7 +217,7 @@ class TradeRecommender {
     const rsi = this.calculateRSI(closes, timeframeParams.rsiPeriod);
     const atr = this.calculateATR(marketData, timeframeParams.atrPeriod);
     const { support, resistance } = this.findSupportResistance(marketData, timeframeParams.supportResistancePeriod);
-    const { pivot, r1, r2, s1, s2 } = this.calculatePivotPoints(marketData);
+    const { pivot, r1, s1 } = this.calculatePivotPoints(marketData);
     const marketStructure = this.analyzeMarketStructure(marketData, timeframeParams.structurePeriod);
     
     const emaShort = this.calculateEMA(closes, timeframeParams.emaShort);
@@ -331,7 +331,7 @@ const tradeRecommender = new TradeRecommender();
 async function fetchMarketData(symbol: string, limit: number = 100, interval: string = '15m') {
   // Try Twelve Data first
   try {
-    const { candles, latestPrice } = await fetchFromTwelveData(symbol, interval, limit);
+    const { candles } = await fetchFromTwelveData(symbol, interval, limit);
     return candles;
   } catch (twelveDataError) {
     console.error('TradeRec: Twelve Data error, falling back to Yahoo Finance:', twelveDataError);

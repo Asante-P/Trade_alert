@@ -5,7 +5,6 @@ export async function GET() {
   try {
     // Try to fetch live economic data from multiple free sources
     const today = new Date();
-    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     
     // Try Investing.com web scraping for live data
     try {
@@ -22,22 +21,15 @@ export async function GET() {
         const html = await response.text();
         
         // Try to extract economic events from the HTML
-        const events: any[] = [];
         
         // Look for common economic event patterns in the HTML
-        const highImpactKeywords = ['NFP', 'Non-Farm Payrolls', 'CPI', 'Consumer Price Index', 'Interest Rate', 'FOMC', 'GDP', 'Retail Sales', 'PMI', 'Unemployment', 'ECB', 'BOJ', 'Bank of England'];
         
         // Extract dates from the HTML
         const datePattern = /(\w{3}\s\d{1,2},\s\d{4})/g;
         const dates = html.match(datePattern) || [];
         
-        // Extract times
-        const timePattern = /(\d{1,2}:\d{2}\s*[AP]M)/g;
-        const times = html.match(timePattern) || [];
-        
         // Create realistic upcoming events based on what we found
         if (dates.length > 0 && dates[0]) {
-          const nextEventDate = new Date(dates[0]);
           
           // Generate upcoming events based on typical schedule
           const upcomingEvents = [

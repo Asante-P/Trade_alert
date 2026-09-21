@@ -1,8 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/bos-monitor?symbols=XAUUSD,EURUSD,BTCUSD,NAS100",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "crons": []
 }

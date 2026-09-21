@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient, ApiError } from '@/lib/api';
 import { config } from '@/lib/config';
-import type { Alert, AlertResponse } from '@/types';
+import type { Alert } from '@/types';
 
 interface UseAlertsResult {
   alerts: Alert[];
@@ -49,6 +49,7 @@ export function useAlerts({
     } finally {
       setLoading(false);
     }
+    return;
   }, [maxAlerts, enabled]);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function useAlerts({
       const intervalId = setInterval(fetchAlerts, refreshInterval);
       return () => clearInterval(intervalId);
     }
+    return;
   }, [fetchAlerts, refreshInterval]);
 
   return { alerts, loading, error, refetch: fetchAlerts };

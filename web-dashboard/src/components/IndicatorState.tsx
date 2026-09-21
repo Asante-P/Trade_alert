@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { isMarketOpen } from '@/lib/utils';
 import { config } from '@/lib/config';
 import type { IndicatorState as IndicatorStateType } from '@/types';

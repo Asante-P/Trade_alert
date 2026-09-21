@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface TradingViewChartProps {
   symbol?: string;
   height?: number;
-  onSymbolChange?: (symbol: string) => void;
   onTimeframeChange?: (timeframe: string) => void;
   onPriceUpdate?: (price: number) => void;
 }
 
-export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSymbolChange, onTimeframeChange, onPriceUpdate }: TradingViewChartProps) {
+export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onTimeframeChange, onPriceUpdate }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string>('');
   const [isMounted, setIsMounted] = useState(false);

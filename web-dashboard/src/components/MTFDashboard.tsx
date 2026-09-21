@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useMarketData } from '@/hooks';
 import { getTrendColor, getTrendBg } from '@/lib/utils';
 import { config } from '@/lib/config';

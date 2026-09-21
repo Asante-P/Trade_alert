@@ -1,15 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import MTFDashboard from './MTFDashboard';
 import IndicatorState from './IndicatorState';
-import AlertFeed from './AlertFeed';
 import TradingViewChart from './TradingViewChart';
 import BOSAlertPanel from './BOSAlertPanel';
 import EconomicNews from './EconomicNews';
 import SymbolSettings from './SymbolSettings';
 import MarketScanner from './MarketScanner';
-import MLPrediction from './MLPrediction';
 import TradeRecommendations from './TradeRecommendations';
 import AIAnalyzerPanel from './AIAnalyzerPanel';
 import { supabase } from '@/lib/supabase';
@@ -61,7 +59,7 @@ export default function TradingDashboard() {
 
   const setupRealtimeSubscriptions = () => {
     // Subscribe to new alerts
-    const alertsChannel = supabase
+    supabase
       .channel('alerts-channel')
       .on(
         'postgres_changes',

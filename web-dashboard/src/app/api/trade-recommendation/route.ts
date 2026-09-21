@@ -144,7 +144,7 @@ class TradeRecommender {
     const rsi = this.calculateRSI(closes, timeframeParams.rsiPeriod);
     const atr = this.calculateATR(marketData, timeframeParams.atrPeriod);
     const { support, resistance } = this.findSupportResistance(marketData, timeframeParams.supportResistancePeriod);
-    const { pivot, r1, r2, s1, s2 } = this.calculatePivotPoints(marketData);
+    const { pivot, r1, s1 } = this.calculatePivotPoints(marketData);
     const marketStructure = this.analyzeMarketStructure(marketData, timeframeParams.structurePeriod);
     
     const emaShort = this.calculateEMA(closes, timeframeParams.emaShort);

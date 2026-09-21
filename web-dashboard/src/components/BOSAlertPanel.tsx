@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function BOSAlertPanel() {
   const [isLoading, setIsLoading] = useState(false);

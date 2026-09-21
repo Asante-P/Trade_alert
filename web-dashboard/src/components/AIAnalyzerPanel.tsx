@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface AnalysisResult {
   symbol: string;
@@ -193,7 +193,7 @@ export default function AIAnalyzerPanel() {
             <div className="mb-3">
               <div className="text-xs text-gray-400 mb-2">Other Opportunities</div>
               <div className="space-y-2">
-                {analysis.topOpportunities.slice(1).map((opp, index) => (
+                {analysis.topOpportunities.slice(1).map((opp) => (
                   <div key={opp.symbol} className="bg-gray-800 rounded p-2">
                     <div className="flex justify-between items-center mb-1">
                       <div>

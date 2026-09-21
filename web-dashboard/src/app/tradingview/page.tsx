@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TradingViewChart from '@/components/TradingViewChart';
 
 export default function TradingViewPage() {
@@ -127,7 +127,6 @@ export default function TradingViewPage() {
         <TradingViewChart
           symbol={symbol}
           height={650}
-          onSymbolChange={setSymbol}
           onTimeframeChange={setTimeframe}
         />
       </div>

@@ -1,5 +1,5 @@
 import { config } from './config';
-import type { Alert, MarketDataResponse, AlertResponse, HealthResponse, MarketCandle } from '@/types';
+import type { Alert, MarketDataResponse, AlertResponse, HealthResponse } from '@/types';
 
 class ApiError extends Error {
   constructor(
