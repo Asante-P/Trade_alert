@@ -1,85 +1,120 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { alertSystem } from '@/lib/alert-system';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const symbol = searchParams.get('symbol') || 'XAUUSD';
+    const action = searchParams.get('action') || 'active';
     const limit = parseInt(searchParams.get('limit') || '50');
-
-    const { data: alerts, error } = await supabase
-      .from('alerts')
-      .select('*')
-      .eq('symbol', symbol)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      return NextResponse.json({ 
-        success: false, 
-        error: error.message,
-        alerts: []
-      }, { status: 200 });
+    
+    if (action === 'active') {
+      const activeAlerts = alertSystem.getActiveAlerts();
+      return NextResponse.json({
+        success: true,
+        alerts: activeAlerts,
+        count: activeAlerts.length
+      });
     }
-
-    return NextResponse.json({ 
-      success: true,
-      alerts: alerts || []
-    });
+    
+    if (action === 'history') {
+      const alertHistory = alertSystem.getAlertHistory(limit);
+      return NextResponse.json({
+        success: true,
+        alerts: alertHistory,
+        count: alertHistory.length
+      });
+    }
+    
+    if (action === 'config') {
+      const config = alertSystem.getConfig();
+      return NextResponse.json({
+        success: true,
+        config
+      });
+    }
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid action'
+    }, { status: 400 });
+    
   } catch (error) {
-    console.error('Error fetching alerts:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Failed to fetch alerts',
-      alerts: []
-    }, { status: 200 });
+    console.error('Error in alerts API:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { symbol, type, direction, price, details } = body;
-
-    if (!symbol || !type || !direction || !price) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Missing required fields: symbol, type, direction, price'
-      }, { status: 400 });
+    const { action, alertId, config, analysis, riskAssessment, economicEvent } = body;
+    
+    if (action === 'acknowledge') {
+      const success = alertSystem.acknowledgeAlert(alertId);
+      return NextResponse.json({
+        success,
+        message: success ? 'Alert acknowledged' : 'Alert not found'
+      });
     }
-
-    const { data: alert, error } = await supabase
-      .from('alerts')
-      .insert({
-        symbol,
-        type,
-        direction,
-        price,
-        timestamp: new Date().toISOString(),
-        status: 'active',
-        details: details || {}
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating alert:', error);
-      return NextResponse.json({ 
-        success: false, 
-        error: error.message
-      }, { status: 500 });
+    
+    if (action === 'config') {
+      alertSystem.updateConfig(config);
+      return NextResponse.json({
+        success: true,
+        message: 'Alert configuration updated',
+        config: alertSystem.getConfig()
+      });
     }
-
-    return NextResponse.json({ 
-      success: true,
-      alert
-    });
+    
+    if (action === 'opportunity') {
+      const alert = alertSystem.createOpportunityAlert(analysis);
+      return NextResponse.json({
+        success: !!alert,
+        alert,
+        message: alert ? 'Opportunity alert created' : 'Alert conditions not met'
+      });
+    }
+    
+    if (action === 'risk') {
+      const alert = alertSystem.createRiskAlert(riskAssessment);
+      return NextResponse.json({
+        success: !!alert,
+        alert,
+        message: alert ? 'Risk alert created' : 'Risk level does not require alert'
+      });
+    }
+    
+    if (action === 'economic') {
+      const alert = alertSystem.createEconomicAlert(economicEvent);
+      return NextResponse.json({
+        success: !!alert,
+        alert,
+        message: alert ? 'Economic alert created' : 'Event does not meet alert criteria'
+      });
+    }
+    
+    if (action === 'clear') {
+      const olderThanHours = body.olderThanHours || 24;
+      alertSystem.clearOldAlerts(olderThanHours);
+      return NextResponse.json({
+        success: true,
+        message: `Old alerts cleared (older than ${olderThanHours} hours)`
+      });
+    }
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid action'
+    }, { status: 400 });
+    
   } catch (error) {
-    console.error('Error creating alert:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Failed to create alert'
+    console.error('Error in alerts API:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

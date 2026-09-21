@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { economicAnalyzer } from '@/lib/economic-analysis';
+import { mlPredictor } from '@/lib/ml-prediction';
+import { sentimentAnalyzer } from '@/lib/sentiment-analysis';
+import { alertSystem } from '@/lib/alert-system';
 
 // Twelve Data API
 const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
@@ -554,9 +558,72 @@ export async function GET(request: NextRequest) {
       try {
         // Analyze the symbol across multiple timeframes
         const analysis = await analyzer.analyzeSymbolMultiTimeframe(symbol);
-        results.push(analysis);
         
-        console.log(`${symbol}: ${analysis.recommendation} (Score: ${analysis.score}, Confluence: ${analysis.confluence})`);
+        // Integrate economic analysis
+        const economicIndicators = economicAnalyzer.getUpcomingHighImpactEvents();
+        const economicImpact = economicAnalyzer.analyzeEconomicImpact(economicIndicators, symbol);
+        
+        // Integrate ML prediction using the 15m timeframe data
+        let mlPrediction = null;
+        let mlScore = 50;
+        
+        try {
+          const candles15m = await fetchMarketData(symbol, '15min', 100);
+          const prices = candles15m.map((c: any) => c.close);
+          
+          if (prices.length > 20) {
+            mlPrediction = mlPredictor.predictMultiTimeframe(prices, analysis.currentPrice);
+            mlScore = mlPrediction.consensus.direction === 'bullish' ? 70 : 
+                      mlPrediction.consensus.direction === 'bearish' ? 30 : 50;
+          }
+        } catch (mlError) {
+          console.log('ML prediction failed, using default score:', mlError);
+        }
+        
+        // Integrate sentiment analysis
+        const sentimentData = sentimentAnalyzer.getSampleSentimentData();
+        const sentimentAnalysis = sentimentAnalyzer.analyzeSentiment(sentimentData);
+        const sentimentScore = sentimentAnalysis.overall === 'bullish' ? 70 : 
+                              sentimentAnalysis.overall === 'bearish' ? 30 : 50;
+        
+        // Combine technical, economic, ML, and sentiment scores (40% technical, 20% economic, 20% ML, 20% sentiment)
+        const combinedScore = (analysis.score * 0.4) + (economicImpact.score * 0.2) + (mlScore * 0.2) + (sentimentScore * 0.2);
+        
+        // Adjust recommendation based on combined score
+        let adjustedRecommendation = analysis.recommendation;
+        if (combinedScore >= 65) {
+          adjustedRecommendation = 'STRONG BUY';
+        } else if (combinedScore >= 50) {
+          adjustedRecommendation = 'BUY';
+        } else if (combinedScore <= 35) {
+          adjustedRecommendation = 'STRONG SELL';
+        } else if (combinedScore <= 50) {
+          adjustedRecommendation = 'SELL';
+        } else {
+          adjustedRecommendation = 'HOLD';
+        }
+        
+        const enhancedAnalysis = {
+          ...analysis,
+          score: Math.round(combinedScore),
+          recommendation: adjustedRecommendation,
+          economicImpact,
+          mlPrediction,
+          sentimentAnalysis,
+          analysisType: 'combined'
+        };
+        
+        // Create trading opportunity alert if conditions are met
+        if (enhancedAnalysis.score >= 65) {
+          const alert = alertSystem.createOpportunityAlert(enhancedAnalysis);
+          if (alert) {
+            console.log(`Created alert for ${symbol}: ${alert.type} - ${alert.message}`);
+          }
+        }
+        
+        results.push(enhancedAnalysis);
+        
+        console.log(`${symbol}: ${enhancedAnalysis.recommendation} (Tech: ${analysis.score}, Econ: ${economicImpact.score}, ML: ${mlScore}, Sent: ${sentimentScore}, Combined: ${combinedScore})`);
       } catch (error) {
         console.error(`Error analyzing ${symbol}:`, error);
         results.push({
