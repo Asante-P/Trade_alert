@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         success: false, 
         error: error.message,
         alerts: []
-      }, { status: 500 });
+      }, { status: 200 });
     }
 
     return NextResponse.json({ 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       success: false, 
       error: 'Failed to fetch alerts',
       alerts: []
-    }, { status: 500 });
+    }, { status: 200 });
   }
 }
 

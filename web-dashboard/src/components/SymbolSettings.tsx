@@ -22,13 +22,20 @@ export default function SymbolSettings() {
 
   const fetchSymbolSettings = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || ''}/monitored-symbols`);
+      const response = await fetch('/api/symbols');
       const data = await response.json();
       if (data.success) {
         setSymbols(data.symbols);
       }
     } catch (error) {
       console.error('Error fetching symbol settings:', error);
+      // Set default symbols if API fails
+      setSymbols([
+        { symbol: 'XAUUSD', enabled: true, alertSettings: { obZones: true, trends: true } },
+        { symbol: 'EURUSD', enabled: true, alertSettings: { obZones: true, trends: true } },
+        { symbol: 'BTCUSD', enabled: true, alertSettings: { obZones: true, trends: true } },
+        { symbol: 'NAS100', enabled: true, alertSettings: { obZones: true, trends: true } },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +44,7 @@ export default function SymbolSettings() {
   const updateSymbolSetting = async (symbol: string, updates: Partial<SymbolConfig>) => {
     setUpdating(symbol);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || ''}/monitored-symbols`, {
+      const response = await fetch('/api/symbols', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol, ...updates })

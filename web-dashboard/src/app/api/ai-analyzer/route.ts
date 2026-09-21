@@ -123,6 +123,120 @@ class TechnicalAnalyzer {
     };
   }
 
+  findPreviousDayHighLow(candles: any[]): { dayHigh: number; dayLow: number } {
+    if (candles.length < 24) return { dayHigh: 0, dayLow: 0 };
+    
+    // Assuming 15m candles, last 96 candles = 24 hours
+    const lastDay = candles.slice(-96);
+    return {
+      dayHigh: Math.max(...lastDay.map(c => c.high)),
+      dayLow: Math.min(...lastDay.map(c => c.low))
+    };
+  }
+
+  findPreviousWeekHighLow(candles: any[]): { weekHigh: number; weekLow: number } {
+    if (candles.length < 672) return { weekHigh: 0, weekLow: 0 };
+    
+    // Assuming 15m candles, last 672 candles = 7 days
+    const lastWeek = candles.slice(-672);
+    return {
+      weekHigh: Math.max(...lastWeek.map(c => c.high)),
+      weekLow: Math.min(...lastWeek.map(c => c.low))
+    };
+  }
+
+  findOrderBlocks(candles: any[]): { bullishOB: number | null; bearishOB: number | null } {
+    if (candles.length < 50) return { bullishOB: null, bearishOB: null };
+    
+    const recent = candles.slice(-50);
+    let bullishOB: number | null = null;
+    let bearishOB: number | null = null;
+    
+    // Look for strong bullish candles (order blocks)
+    for (let i = 1; i < recent.length; i++) {
+      const candle = recent[i];
+      const body = Math.abs(candle.close - candle.open);
+      const range = candle.high - candle.low;
+      const bodyRatio = body / range;
+      
+      // Strong bullish candle: close > open, body > 60% of range
+      if (candle.close > candle.open && bodyRatio > 0.6) {
+        const isStrong = candle.close > recent[i - 1].high;
+        if (isStrong && !bullishOB) {
+          bullishOB = candle.low; // Order block at the low of the bullish candle
+        }
+      }
+      
+      // Strong bearish candle: close < open, body > 60% of range
+      if (candle.close < candle.open && bodyRatio > 0.6) {
+        const isStrong = candle.close < recent[i - 1].low;
+        if (isStrong && !bearishOB) {
+          bearishOB = candle.high; // Order block at the high of the bearish candle
+        }
+      }
+    }
+    
+    return { bullishOB, bearishOB };
+  }
+
+  detectBOS(candles: any[]): { bullishBOS: boolean; bearishBOS: boolean; lastBullishPrice: number | null; lastBearishPrice: number | null } {
+    if (candles.length < 50) return { bullishBOS: false, bearishBOS: false, lastBullishPrice: null, lastBearishPrice: null };
+    
+    const recent = candles.slice(-50);
+    let bullishBOS = false;
+    let bearishBOS = false;
+    let lastBullishPrice: number | null = null;
+    let lastBearishPrice: number | null = null;
+    
+    // Find pivot highs and lows
+    const pivotHighs: number[] = [];
+    const pivotLows: number[] = [];
+    
+    for (let i = 2; i < recent.length - 2; i++) {
+      const prevHigh = recent[i - 1].high;
+      const currentHigh = recent[i].high;
+      const nextHigh = recent[i + 1].high;
+      
+      const prevLow = recent[i - 1].low;
+      const currentLow = recent[i].low;
+      const nextLow = recent[i + 1].low;
+      
+      // Pivot high
+      if (currentHigh > prevHigh && currentHigh > nextHigh) {
+        pivotHighs.push(currentHigh);
+      }
+      
+      // Pivot low
+      if (currentLow < prevLow && currentLow < nextLow) {
+        pivotLows.push(currentLow);
+      }
+    }
+    
+    if (pivotHighs.length < 2 || pivotLows.length < 2) {
+      return { bullishBOS, bearishBOS, lastBullishPrice, lastBearishPrice };
+    }
+    
+    const currentPrice = recent[recent.length - 1].close;
+    const lastPivotHigh = pivotHighs[pivotHighs.length - 1];
+    const lastPivotLow = pivotLows[pivotLows.length - 1];
+    const prevPivotHigh = pivotHighs[pivotHighs.length - 2];
+    const prevPivotLow = pivotLows[pivotLows.length - 2];
+    
+    // Bullish BOS: Price breaks above previous pivot high
+    if (currentPrice > lastPivotHigh && lastPivotHigh > prevPivotHigh) {
+      bullishBOS = true;
+      lastBullishPrice = lastPivotHigh;
+    }
+    
+    // Bearish BOS: Price breaks below previous pivot low
+    if (currentPrice < lastPivotLow && lastPivotLow < prevPivotLow) {
+      bearishBOS = true;
+      lastBearishPrice = lastPivotLow;
+    }
+    
+    return { bullishBOS, bearishBOS, lastBullishPrice, lastBearishPrice };
+  }
+
   analyzeMarketStructure(candles: any[], period: number = 20): { trend: string; strength: number } {
     const recent = candles.slice(-period);
     const ema = this.calculateEMA(recent.map(c => c.close), 20);
@@ -175,6 +289,10 @@ class TechnicalAnalyzer {
     const ema20 = this.calculateEMA(closes, 20);
     const ema50 = this.calculateEMA(closes, 50);
     const { support, resistance } = this.findSupportResistance(candles, 20);
+    const { dayHigh, dayLow } = this.findPreviousDayHighLow(candles);
+    const { weekHigh, weekLow } = this.findPreviousWeekHighLow(candles);
+    const { bullishOB, bearishOB } = this.findOrderBlocks(candles);
+    const { bullishBOS, bearishBOS, lastBullishPrice, lastBearishPrice } = this.detectBOS(candles);
     const marketStructure = this.analyzeMarketStructure(candles, 20);
     
     // Calculate composite score (0-100)
@@ -203,6 +321,38 @@ class TechnicalAnalyzer {
     if (distToSupport < 2 && distToSupport > 0) score += 10; // Near support
     if (distToResistance < 2 && distToResistance > 0) score -= 10; // Near resistance
     
+    // Previous Day High/Low proximity (10 points)
+    const distToDayHigh = (dayHigh - currentPrice) / atr;
+    const distToDayLow = (currentPrice - dayLow) / atr;
+    
+    if (distToDayLow < 1 && distToDayLow > 0) score += 10; // Near day low - buy opportunity
+    if (distToDayHigh < 1 && distToDayHigh > 0) score -= 10; // Near day high - sell opportunity
+    
+    // Previous Week High/Low proximity (10 points)
+    const distToWeekHigh = (weekHigh - currentPrice) / atr;
+    const distToWeekLow = (currentPrice - weekLow) / atr;
+    
+    if (distToWeekLow < 2 && distToWeekLow > 0) score += 10; // Near week low - strong buy opportunity
+    if (distToWeekHigh < 2 && distToWeekHigh > 0) score -= 10; // Near week high - strong sell opportunity
+    
+    // Order Block proximity (15 points)
+    if (bullishOB) {
+      const distToBullishOB = (currentPrice - bullishOB) / atr;
+      if (distToBullishOB < 1 && distToBullishOB > 0) score += 15; // Near bullish order block
+    }
+    if (bearishOB) {
+      const distToBearishOB = (bearishOB - currentPrice) / atr;
+      if (distToBearishOB < 1 && distToBearishOB > 0) score -= 15; // Near bearish order block
+    }
+    
+    // BOS (Break of Structure) - 20 points
+    if (bullishBOS) {
+      score += 20; // Bullish BOS - strong buy signal
+    }
+    if (bearishBOS) {
+      score -= 20; // Bearish BOS - strong sell signal
+    }
+    
     // Market structure strength (10 points)
     score += marketStructure.strength * 10;
     
@@ -219,19 +369,19 @@ class TechnicalAnalyzer {
     let confidence = 0;
     let reason = '';
     
-    if (score >= 75) {
+    if (score >= 65) {
       recommendation = 'STRONG BUY';
       confidence = score;
       reason = 'Strong bullish trend with oversold conditions and support proximity';
-    } else if (score >= 60) {
+    } else if (score >= 50) {
       recommendation = 'BUY';
       confidence = score;
       reason = 'Bullish trend with favorable technical conditions';
-    } else if (score <= 25) {
+    } else if (score <= 35) {
       recommendation = 'STRONG SELL';
       confidence = 100 - score;
       reason = 'Strong bearish trend with overbought conditions and resistance proximity';
-    } else if (score <= 40) {
+    } else if (score <= 50) {
       recommendation = 'SELL';
       confidence = 100 - score;
       reason = 'Bearish trend with unfavorable technical conditions';
@@ -270,7 +420,17 @@ class TechnicalAnalyzer {
         ema20: parseFloat(ema20.toFixed(2)),
         ema50: parseFloat(ema50.toFixed(2)),
         support: parseFloat(support.toFixed(2)),
-        resistance: parseFloat(resistance.toFixed(2))
+        resistance: parseFloat(resistance.toFixed(2)),
+        dayHigh: parseFloat(dayHigh.toFixed(2)),
+        dayLow: parseFloat(dayLow.toFixed(2)),
+        weekHigh: parseFloat(weekHigh.toFixed(2)),
+        weekLow: parseFloat(weekLow.toFixed(2)),
+        bullishOB: bullishOB ? parseFloat(bullishOB.toFixed(2)) : null,
+        bearishOB: bearishOB ? parseFloat(bearishOB.toFixed(2)) : null,
+        bullishBOS,
+        bearishBOS,
+        lastBullishBOS: lastBullishPrice ? parseFloat(lastBullishPrice.toFixed(2)) : null,
+        lastBearishBOS: lastBearishPrice ? parseFloat(lastBearishPrice.toFixed(2)) : null,
       },
       marketStructure
     };
@@ -314,8 +474,8 @@ class TechnicalAnalyzer {
     const compositeScore = totalWeight > 0 ? weightedScore / totalWeight : 50;
     
     // Determine confluence (how many timeframes agree)
-    const bullishCount = timeframeResults.filter(r => r.score >= 60).length;
-    const bearishCount = timeframeResults.filter(r => r.score <= 40).length;
+    const bullishCount = timeframeResults.filter(r => r.score >= 50).length;
+    const bearishCount = timeframeResults.filter(r => r.score <= 50).length;
     const confluence = bullishCount > bearishCount ? 'bullish' : bearishCount > bullishCount ? 'bearish' : 'neutral';
     
     // Determine composite recommendation
@@ -323,19 +483,19 @@ class TechnicalAnalyzer {
     let compositeConfidence = 0;
     let compositeReason = '';
     
-    if (compositeScore >= 75) {
+    if (compositeScore >= 65) {
       compositeRecommendation = 'STRONG BUY';
       compositeConfidence = compositeScore;
       compositeReason = `Strong buy signal across ${bullishCount} timeframes with high confluence`;
-    } else if (compositeScore >= 60) {
+    } else if (compositeScore >= 50) {
       compositeRecommendation = 'BUY';
       compositeConfidence = compositeScore;
       compositeReason = `Buy signal with ${bullishCount} bullish timeframes`;
-    } else if (compositeScore <= 25) {
+    } else if (compositeScore <= 35) {
       compositeRecommendation = 'STRONG SELL';
       compositeConfidence = 100 - compositeScore;
       compositeReason = `Strong sell signal across ${bearishCount} timeframes with high confluence`;
-    } else if (compositeScore <= 40) {
+    } else if (compositeScore <= 50) {
       compositeRecommendation = 'SELL';
       compositeConfidence = 100 - compositeScore;
       compositeReason = `Sell signal with ${bearishCount} bearish timeframes`;
@@ -410,8 +570,8 @@ export async function GET(request: NextRequest) {
     // Sort by score (highest first)
     const sortedResults = results.sort((a, b) => (b.score || 0) - (a.score || 0));
     
-    // Get top 3 opportunities
-    const topOpportunities = sortedResults.filter(r => r.score !== undefined && r.score !== null && r.score > 55).slice(0, 3);
+    // Get top 3 opportunities (lowered threshold from 55 to 40 for more opportunities)
+    const topOpportunities = sortedResults.filter(r => r.score !== undefined && r.score !== null && r.score > 40).slice(0, 3);
     
     return NextResponse.json({
       success: true,

@@ -170,19 +170,19 @@ export default function AIAnalyzerPanel() {
               <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
                 <div className="bg-gray-800/50 rounded p-2">
                   <div className="text-gray-400">Entry</div>
-                  <div className="text-white font-semibold">{analysis.summary.bestEntry.entryPrice.toFixed(2)}</div>
+                  <div className="text-white font-semibold">{analysis.summary.bestEntry.entryPrice ? analysis.summary.bestEntry.entryPrice.toFixed(2) : 'N/A'}</div>
                 </div>
                 <div className="bg-gray-800/50 rounded p-2">
                   <div className="text-gray-400">SL</div>
-                  <div className="text-red-400 font-semibold">{analysis.summary.bestEntry.stopLoss.toFixed(2)}</div>
+                  <div className="text-red-400 font-semibold">{analysis.summary.bestEntry.stopLoss ? analysis.summary.bestEntry.stopLoss.toFixed(2) : 'N/A'}</div>
                 </div>
                 <div className="bg-gray-800/50 rounded p-2">
                   <div className="text-gray-400">TP</div>
-                  <div className="text-green-400 font-semibold">{analysis.summary.bestEntry.takeProfit.toFixed(2)}</div>
+                  <div className="text-green-400 font-semibold">{analysis.summary.bestEntry.takeProfit ? analysis.summary.bestEntry.takeProfit.toFixed(2) : 'N/A'}</div>
                 </div>
               </div>
               <div className="flex justify-between mt-2 text-xs">
-                <span className="text-gray-400">Risk/Reward: <span className="text-white">{analysis.summary.bestEntry.riskRewardRatio}</span></span>
+                <span className="text-gray-400">Risk/Reward: <span className="text-white">{analysis.summary.bestEntry.riskRewardRatio || 'N/A'}</span></span>
                 <span className="text-gray-400">Confidence: <span className="text-white">{analysis.summary.bestEntry.confidence}%</span></span>
               </div>
             </div>
