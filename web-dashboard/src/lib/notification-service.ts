@@ -247,9 +247,15 @@ export class NotificationService {
   }
 
   private generateSignature(data: any): string {
-    const crypto = require('crypto');
+    // Simple signature generation (for production, use proper crypto library)
     const string = JSON.stringify(data) + this.config.webhook.secret;
-    return crypto.createHash('sha256').update(string).digest('hex');
+    let hash = 0;
+    for (let i = 0; i < string.length; i++) {
+      const char = string.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(16);
   }
 
   updateConfig(newConfig: Partial<NotificationConfig>) {
