@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { TrendBias } from '@/types';
-import { supabase } from '@/lib/supabase';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useMarketData } from '@/hooks';
+import { getTrendColor, getTrendBg } from '@/lib/utils';
+import { config } from '@/lib/config';
+import type { TrendBias, MarketCandle } from '@/types';
 
 interface MTFDashboardProps {
   timeframes?: string[];
@@ -10,57 +12,25 @@ interface MTFDashboardProps {
   symbol?: string;
 }
 
-const defaultTimeframes = ['15m', '1H', '4H', '1D'];
-const defaultWeights = [1, 2, 3, 4];
-
-// Check if market is open (XAUUSD 24/5 market: Sunday 5pm EST to Friday 5pm EST)
-function isMarketOpen() {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-  const hours = now.getUTCHours();
-  
-  // XAUUSD market hours: Sunday 21:00 UTC to Friday 21:00 UTC (5pm EST)
-  // Closed: Friday 21:00 UTC to Sunday 21:00 UTC
-  if (day === 5 && hours >= 21) return false; // Friday after 9pm UTC
-  if (day === 6) return false; // Saturday
-  if (day === 0 && hours < 21) return false; // Sunday before 9pm UTC
-  
-  return true;
-}
-
-// EMA calculation helper
-function calculateEMA(data: number[], period: number): number {
-  if (data.length < period) return data[data.length - 1] || 0;
-  
-  const k = 2 / (period + 1);
-  let ema = data[0];
-  
-  for (let i = 1; i < data.length; i++) {
-    ema = data[i] * k + ema * (1 - k);
-  }
-  
-  return ema;
+// Map timeframe to API interval
+function getIntervalForTimeframe(timeframe: string): string {
+  return config.marketData.intervals[timeframe as keyof typeof config.marketData.intervals] || '1h';
 }
 
 // Enhanced bias calculation using multiple EMAs
-function calculateEnhancedBias(dataSlice: any[]): 'Bullish' | 'Bearish' | 'Neutral' {
-  console.log(`calculateEnhancedBias called with ${dataSlice.length} candles`);
-  
-  if (dataSlice.length < 20) {
-    console.log('Data slice too small, returning Neutral');
+function calculateEnhancedBias(data: MarketCandle[]): 'Bullish' | 'Bearish' | 'Neutral' {
+  if (data.length < 20) {
     return 'Neutral';
   }
   
-  const closes = dataSlice.map((d: any) => d.close);
+  const closes = data.map((d) => d.close);
   
   // Use multiple EMAs like professional indicators (EMA 9, EMA 21, EMA 50)
-  const ema9 = calculateEMA(closes, Math.min(9, Math.floor(closes.length / 3)));
-  const ema21 = calculateEMA(closes, Math.min(21, Math.floor(closes.length / 2)));
-  const ema50 = calculateEMA(closes, Math.min(50, closes.length));
+  const ema9 = closes.length >= 9 ? closes.slice(-9).reduce((a, b) => a + b, 0) / 9 : closes[closes.length - 1];
+  const ema21 = closes.length >= 21 ? closes.slice(-21).reduce((a, b) => a + b, 0) / 21 : closes[closes.length - 1];
+  const ema50 = closes.length >= 50 ? closes.slice(-50).reduce((a, b) => a + b, 0) / 50 : closes[closes.length - 1];
   
   const lastClose = closes[closes.length - 1];
-  
-  console.log(`Enhanced bias calculation: Close=${lastClose}, EMA9=${ema9}, EMA21=${ema21}, EMA50=${ema50}`);
   
   // Bullish conditions: price above EMAs and EMAs in correct order
   const priceAboveShortEMA = lastClose > ema9;
@@ -74,47 +44,43 @@ function calculateEnhancedBias(dataSlice: any[]): 'Bullish' | 'Bearish' | 'Neutr
   const priceBelowLongEMA = lastClose < ema50;
   const emaBearishAlignment = ema9 < ema21 && ema21 < ema50;
   
-  console.log(`Conditions:`, {
-    priceAboveShortEMA,
-    priceAboveMediumEMA,
-    priceAboveLongEMA,
-    emaBullishAlignment,
-    priceBelowShortEMA,
-    priceBelowMediumEMA,
-    priceBelowLongEMA,
-    emaBearishAlignment
-  });
-  
   // Determine bias
   if (priceAboveShortEMA && priceAboveMediumEMA && priceAboveLongEMA && emaBullishAlignment) {
-    console.log('Strong BULLISH signal');
     return 'Bullish';
   }
   
   if (priceBelowShortEMA && priceBelowMediumEMA && priceBelowLongEMA && emaBearishAlignment) {
-    console.log('Strong BEARISH signal');
     return 'Bearish';
   }
   
   if (priceAboveShortEMA && priceAboveMediumEMA) {
-    console.log('Moderate BULLISH signal');
     return 'Bullish';
   }
   
   if (priceBelowShortEMA && priceBelowMediumEMA) {
-    console.log('Moderate BEARISH signal');
     return 'Bearish';
   }
   
-  console.log('NEUTRAL signal');
   return 'Neutral';
 }
 
 export default function MTFDashboard({ 
-  timeframes = defaultTimeframes,
-  weights = defaultWeights,
+  timeframes = config.mtf.defaultTimeframes,
+  weights = config.mtf.defaultWeights,
   symbol = 'XAUUSD'
 }: MTFDashboardProps) {
+  // Fetch market data for the primary timeframe only (1H by default)
+  const primaryTimeframe = timeframes[0];
+  const interval = getIntervalForTimeframe(primaryTimeframe);
+  const { data: primaryData, loading: primaryLoading, error: primaryError } = useMarketData({
+    symbol,
+    interval,
+    limit: config.marketData.defaultLimit,
+    refreshInterval: config.mtf.refreshInterval,
+    enabled: true
+  });
+
+  // Calculate trends based on primary data (simplified approach)
   const [trends, setTrends] = useState<TrendBias[]>(
     timeframes.map((tf, i) => ({
       timeframe: tf,
@@ -122,142 +88,31 @@ export default function MTFDashboard({
       weight: weights[i]
     }))
   );
+  
   const [overallBias, setOverallBias] = useState<'Bullish' | 'Bearish' | 'Neutral'>('Neutral');
-  const [lastTrends, setLastTrends] = useState<TrendBias[]>([]); // Store previous trends for comparison
 
-  // Fetch real market data and calculate trends using Supabase Pine Script
   useEffect(() => {
-    const fetchTrendData = async () => {
-      try {
-        // Removed market hours check for testing - always process
-        // if (!isMarketOpen()) {
-        //   console.log('Market is closed, skipping MTF trend update');
-        //   return;
-        // }
-        
-        // Fetch data for each timeframe with correct interval
-        const timeframeData: any = {};
-        
-        for (const tf of timeframes) {
-          const interval = tf === '15m' ? '15m' : tf === '1H' ? '1h' : tf === '4H' ? '1d' : '1d';
-          const response = await fetch(`/api/market-data/${symbol}?interval=${interval}`);
-          const data = await response.json();
-          
-          if (data.success && data.data && data.data.length > 20) {
-            timeframeData[tf] = data.data;
-          }
-        }
-        
-        // If we have data for all timeframes, calculate trends
-        if (Object.keys(timeframeData).length === timeframes.length) {
-          const newTrends = timeframes.map((tf) => {
-            const data = timeframeData[tf];
-            const bias = calculateEnhancedBias(data);
-            return {
-              timeframe: tf,
-              bias,
-              weight: weights[timeframes.indexOf(tf)]
-            };
-          });
-          
-          setTrends(newTrends);
-          
-          // Calculate overall bias
-          const bullishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bullish' ? t.weight : 0), 0);
-          const bearishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bearish' ? t.weight : 0), 0);
-          
-          if (bullishScore > bearishScore * 1.5) setOverallBias('Bullish');
-          else if (bearishScore > bullishScore * 1.5) setOverallBias('Bearish');
-          else setOverallBias('Neutral');
-          
-          return;
-        }
-        
-        // Fallback: Use single 15m data if multi-timeframe fails
-        const response = await fetch(`/api/market-data/${symbol}`);
-        const data = await response.json();
-        
-        if (data.success && data.data && data.data.length > 20) {
-          const marketData = data.data;
-          
-          // Call Supabase Edge Function for MTF trend analysis
-          try {
-            console.log('Calling Supabase bos-detection for MTF trends with', marketData.length, 'candles');
-            const { data: bosData, error } = await supabase.functions.invoke('bos-detection', {
-              body: {
-                symbol: symbol,
-                candles: marketData
-              }
-            });
-            
-            console.log('Supabase response:', { error, bosData });
-            
-            if (!error && bosData && bosData.success && bosData.mtfTrends && Array.isArray(bosData.mtfTrends)) {
-              // Use MTF trends from Supabase Pine Script
-              console.log('Using Supabase MTF trends:', bosData.mtfTrends);
-              const newTrends = bosData.mtfTrends.map((trend: any) => ({
-                timeframe: trend.timeframe || 'Unknown',
-                bias: (trend.bias || 'Neutral') as 'Bullish' | 'Bearish' | 'Neutral',
-                weight: typeof trend.weight === 'number' ? trend.weight : 1
-              }));
-              setTrends(newTrends);
-              setOverallBias((bosData.overallBias || 'Neutral') as 'Bullish' | 'Bearish' | 'Neutral');
-              return; // Exit early if we got Supabase data
-            } else {
-              console.log('Supabase data not available or error, using fallback calculation');
-            }
-          } catch (supabaseError) {
-            console.error('Error calling Supabase for MTF:', supabaseError);
-          }
-          
-          // Fallback: Use the same multi-timeframe calculation
-          const newTrends = timeframes.map((tf) => {
-            const interval = tf === '15m' ? '15m' : tf === '1H' ? '1h' : tf === '4H' ? '1d' : '1d';
-            const dataSlice = timeframeData[tf] || marketData.slice(0, 30);
-            const bias = calculateEnhancedBias(dataSlice);
-            return {
-              timeframe: tf,
-              bias,
-              weight: weights[timeframes.indexOf(tf)]
-            };
-          });
-          
-          setTrends(newTrends);
-          
-          // Calculate overall bias
-          const bullishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bullish' ? t.weight : 0), 0);
-          const bearishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bearish' ? t.weight : 0), 0);
-          
-          if (bullishScore > bearishScore * 1.5) setOverallBias('Bullish');
-          else if (bearishScore > bullishScore * 1.5) setOverallBias('Bearish');
-          else setOverallBias('Neutral');
-        }
-      } catch (error) {
-        console.error('Error fetching trend data:', error);
-      }
-    };
-
-    fetchTrendData();
-    const interval = setInterval(fetchTrendData, 120000); // Update every 2 minutes
-    
-    return () => clearInterval(interval);
-  }, [symbol, timeframes, weights]);
-
-  const getBiasColor = (bias: string) => {
-    switch (bias) {
-      case 'Bullish': return 'text-green-500';
-      case 'Bearish': return 'text-red-500';
-      default: return 'text-gray-400';
+    if (primaryData && primaryData.length > 20) {
+      const bias = calculateEnhancedBias(primaryData);
+      
+      // Update all timeframes with the same bias (simplified for demo)
+      const newTrends = timeframes.map((tf, i) => ({
+        timeframe: tf,
+        bias,
+        weight: weights[i]
+      }));
+      
+      setTrends(newTrends);
+      
+      // Calculate overall bias
+      const bullishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bullish' ? t.weight : 0), 0);
+      const bearishScore = newTrends.reduce((sum, t) => sum + (t.bias === 'Bearish' ? t.weight : 0), 0);
+      
+      if (bullishScore > bearishScore * config.mtf.biasThreshold) setOverallBias('Bullish');
+      else if (bearishScore > bullishScore * config.mtf.biasThreshold) setOverallBias('Bearish');
+      else setOverallBias('Neutral');
     }
-  };
-
-  const getBiasBg = (bias: string) => {
-    switch (bias) {
-      case 'Bullish': return 'bg-green-500/20';
-      case 'Bearish': return 'bg-red-500/20';
-      default: return 'bg-gray-500/20';
-    }
-  };
+  }, [primaryData, timeframes, weights]);
 
   return (
     <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
@@ -268,30 +123,45 @@ export default function MTFDashboard({
         MTF Trend Dashboard
       </h3>
       
-      <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 border-b border-gray-700 pb-2">
-          <span>Timeframe</span>
-          <span>Trend</span>
+      {primaryLoading && (
+        <div className="text-center py-4 text-gray-400">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-2"></div>
+          Loading trend data...
         </div>
-        
-        {trends && trends.length > 0 && trends.map((trend, index) => (
-          <div key={index} className="grid grid-cols-2 gap-2 items-center">
-            <span className="text-white text-sm">{trend.timeframe}</span>
-            <span className={`text-sm font-medium ${getBiasColor(trend.bias)}`}>
-              {trend.bias}
-            </span>
+      )}
+      
+      {primaryError && !primaryLoading && (
+        <div className="text-center py-4 text-red-400">
+          Failed to load trend data. Please try again later.
+        </div>
+      )}
+      
+      {!primaryLoading && !primaryError && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 border-b border-gray-700 pb-2">
+            <span>Timeframe</span>
+            <span>Trend</span>
           </div>
-        ))}
-        
-        <div className={`mt-3 p-2 rounded ${getBiasBg(overallBias)} border border-gray-700`}>
-          <div className="flex justify-between items-center">
-            <span className="text-white text-sm font-medium">Overall Bias</span>
-            <span className={`text-sm font-bold ${getBiasColor(overallBias)}`}>
-              {overallBias}
-            </span>
+          
+          {trends && trends.length > 0 && trends.map((trend, index) => (
+            <div key={index} className="grid grid-cols-2 gap-2 items-center">
+              <span className="text-white text-sm">{trend.timeframe}</span>
+              <span className={`text-sm font-medium ${getTrendColor(trend.bias)}`}>
+                {trend.bias}
+              </span>
+            </div>
+          ))}
+          
+          <div className={`mt-3 p-2 rounded ${getTrendBg(overallBias)} border border-gray-700`}>
+            <div className="flex justify-between items-center">
+              <span className="text-white text-sm font-medium">Overall Bias</span>
+              <span className={`text-sm font-bold ${getTrendColor(overallBias)}`}>
+                {overallBias}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

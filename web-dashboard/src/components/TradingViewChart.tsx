@@ -17,12 +17,7 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [chartSettings, setChartSettings] = useState({
     interval: '15',
-    showDrawingTools: true,
-    showIndicators: true,
     showVolume: true,
-    showMA: true,
-    showEMA: true,
-    showSideToolbar: true,
   });
 
   // Notify parent when timeframe changes
@@ -87,18 +82,23 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
           backgroundColor: 'rgba(17, 24, 39, 1)',
           gridColor: 'rgba(31, 41, 55, 0.5)',
           hide_top_toolbar: false,
+          hide_side_toolbar: false,
           hide_legend: false,
           save_image: false,
           container_id: containerId,
           height: height,
           allow_symbol_change: false,
+          toolbar_bg: '#1f2937',
           disabled_features: [
             'header_symbol_search',
             'header_screenshot',
             'header_compare',
             'header_settings',
-            'header_interval',
-            'header_resolutions',
+          ],
+          enabled_features: [
+            'study_templates',
+            'use_localstorage_for_settings',
+            'side_toolbar_in_fullscreen',
           ],
         });
       }
@@ -160,18 +160,6 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
 
         {/* Chart Settings */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Settings:</span>
-          
-          <label className="flex items-center gap-1 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={chartSettings.showDrawingTools}
-              onChange={(e) => setChartSettings(prev => ({ ...prev, showDrawingTools: e.target.checked }))}
-              className="rounded bg-gray-700 border-gray-600 text-blue-500"
-            />
-            Drawing
-          </label>
-          
           <label className="flex items-center gap-1 text-xs text-gray-400">
             <input
               type="checkbox"
@@ -182,38 +170,10 @@ export default function TradingViewChart({ symbol = 'XAUUSD', height = 500, onSy
             Volume
           </label>
           
-          <label className="flex items-center gap-1 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={chartSettings.showMA}
-              onChange={(e) => setChartSettings(prev => ({ ...prev, showMA: e.target.checked }))}
-              className="rounded bg-gray-700 border-gray-600 text-blue-500"
-            />
-            MA
-          </label>
-          
-          <label className="flex items-center gap-1 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={chartSettings.showEMA}
-              onChange={(e) => setChartSettings(prev => ({ ...prev, showEMA: e.target.checked }))}
-              className="rounded bg-gray-700 border-gray-600 text-blue-500"
-            />
-            EMA
-          </label>
-          
-          {/* Collapsible Sidebar Button */}
-          <button
-            onClick={() => setChartSettings(prev => ({ ...prev, showSideToolbar: !prev.showSideToolbar }))}
-            className={`px-2 py-1 rounded text-xs transition-colors ${
-              chartSettings.showSideToolbar 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
-            title="Toggle Widgets/Hotlist Sidebar"
-          >
-            {chartSettings.showSideToolbar ? '◀ Widgets' : '▶ Widgets'}
-          </button>
+          <span className="text-xs text-gray-500">|</span>
+          <span className="text-xs text-gray-400">Drawing tools enabled</span>
+          <span className="text-xs text-gray-500">|</span>
+          <span className="text-xs text-gray-400">Add indicators from toolbar</span>
         </div>
       </div>
 

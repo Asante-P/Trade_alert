@@ -1,6 +1,30 @@
 {
-  "dependencies": {
-    "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.3"
-  }
+  "name": "trade-alert-next",
+  "version": "1.0.0",
+  "description": "Trade Alert System - Flutter, Backend, and Web Dashboard",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\" \"npm run dev:flutter\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:web": "cd web-dashboard && npm run dev",
+    "dev:flutter": "cd flutter && flutter run",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:web\"",
+    "start:backend": "cd backend && npm start",
+    "start:web": "cd web-dashboard && npm start",
+    "build:web": "cd web-dashboard && npm run build",
+    "install:all": "npm install && cd backend && npm install && cd ../web-dashboard && npm install && cd ../flutter && flutter pub get",
+    "clean": "cd backend && npm run clean && cd ../web-dashboard && rm -rf .next node_modules && cd ../flutter && flutter clean",
+    "test": "npm run test:web && npm run test:flutter",
+    "test:web": "cd web-dashboard && npm test",
+    "test:flutter": "cd flutter && flutter test",
+    "lint": "npm run lint:web && npm run lint:flutter",
+    "lint:web": "cd web-dashboard && npm run lint",
+    "lint:flutter": "cd flutter && flutter analyze"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "backend",
+    "web-dashboard"
+  ]
 }

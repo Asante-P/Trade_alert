@@ -9,7 +9,6 @@ import BOSAlertPanel from './BOSAlertPanel';
 import EconomicNews from './EconomicNews';
 import SymbolSettings from './SymbolSettings';
 import MarketScanner from './MarketScanner';
-import PerformanceMetrics from './PerformanceMetrics';
 import MLPrediction from './MLPrediction';
 import TradeRecommendations from './TradeRecommendations';
 import AIAnalyzerPanel from './AIAnalyzerPanel';
@@ -200,11 +199,6 @@ export default function TradingDashboard() {
         {/* Market Scanner */}
         <div className="mb-6">
           <MarketScanner />
-        </div>
-
-        {/* Performance Metrics */}
-        <div className="mb-6">
-          <PerformanceMetrics />
         </div>
 
         {/* Quick Stats */}

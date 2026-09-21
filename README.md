@@ -1,34 +1,47 @@
-# Trade Alert - Flutter TradingView Notification App
+# Trade Alert - Multi-Platform Trading Notification System
 
-A Flutter application that receives push notifications on your phone when TradingView alerts trigger, specifically for BOS (Break of Structure) and price reaching zones.
+A comprehensive trading alert system with Flutter mobile app, Node.js backend, and Next.js web dashboard for monitoring TradingView indicator alerts, specifically designed for BOS (Break of Structure) and price reaching zones.
 
 ## Architecture
 
 - **Flutter App**: Mobile app to receive and display alerts
 - **Node.js Backend**: Server to receive TradingView webhooks and send push notifications via Firebase Cloud Messaging (FCM)
+- **Next.js Web Dashboard**: Real-time web interface for monitoring alerts, trends, and market data
 - **Firebase Cloud Messaging**: Push notification service
+- **Supabase**: Database and real-time subscriptions
 - **TradingView**: Sends webhook alerts to the backend server
 
-## Setup Instructions
+## Quick Start
 
-### 1. Firebase Setup
+### Prerequisites
+- Node.js (v18 or higher)
+- Flutter SDK
+- Firebase account
+- Supabase account (for web dashboard)
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project
-3. Enable Cloud Messaging:
-   - Go to Project Settings
-   - Click on Cloud Messaging tab
-   - Enable Cloud Messaging API
-4. Add an Android app:
-   - Download `google-services.json`
-   - Place it in `flutter/android/app/`
-5. Generate a private key for the backend:
-   - Go to Project Settings -> Service Accounts
-   - Click "Generate New Private Key"
-   - Save the JSON file
-   - Copy the contents to `backend/.env`
+### Installation
 
-### 2. Backend Setup
+1. **Install all dependencies:**
+   ```bash
+   npm run install:all
+   ```
+
+2. **Configure environment variables:**
+   - Copy `backend/.env.example` to `backend/.env` and configure Firebase credentials
+   - Copy `web-dashboard/.env.example` to `web-dashboard/.env.local` and configure backend URLs
+
+3. **Start all services:**
+   ```bash
+   npm run dev
+   ```
+   This starts:
+   - Backend server on `http://localhost:3000`
+   - Web dashboard on `http://localhost:3001`
+   - Flutter app (requires manual device connection)
+
+### Individual Service Setup
+
+#### Backend Setup
 
 1. Navigate to the backend directory:
    ```bash
@@ -55,23 +68,31 @@ A Flutter application that receives push notifications on your phone when Tradin
    npm run dev
    ```
 
-The server will run on `http://localhost:3000` by default.
+#### Web Dashboard Setup
 
-### 3. Expose Server to Internet (for TradingView Webhooks)
+1. Navigate to the web-dashboard directory:
+   ```bash
+   cd web-dashboard
+   ```
 
-TradingView webhooks need a public URL. Use one of these services:
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-**Option A: ngrok (Recommended for testing)**
-```bash
-ngrok http 3000
-```
-Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`)
+3. Configure environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your backend URL and Supabase credentials.
 
-**Option B: Deploy to a cloud server**
-- Deploy to VPS (DigitalOcean, AWS, etc.)
-- Use your server's public IP/domain
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   The dashboard will be available at `http://localhost:3001`
 
-### 4. Flutter App Setup
+#### Flutter App Setup
 
 1. Navigate to the Flutter directory:
    ```bash
@@ -93,119 +114,58 @@ Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`)
 
 5. In the app settings, set the server URL to your public URL (e.g., `https://abc123.ngrok.io`)
 
-### 5. TradingView Alert Configuration
+## Development Scripts
 
-#### For BOS Alerts
+Root-level scripts for managing the entire project:
 
-In your Pine Script, the BOS detection is already implemented. Add webhook alerts:
-
-```pine
-// Add this after your existing alert code
-if bullSignal and alertBull
-    alert("[BOS] Bullish Break of Structure @ " + str.tostring(close, format.mintick) +
-          " — " + syminfo.ticker + " " + timeframe.period, 
-          alert.freq_once_per_bar_close)
-
-if bearSignal and alertBear
-    alert("[BOS] Bearish Break of Structure @ " + str.tostring(close, format.mintick) +
-          " — " + syminfo.ticker + " " + timeframe.period, 
-          alert.freq_once_per_bar_close)
-```
-
-#### For Zone Alerts
-
-```pine
-// Zone alerts are already in your script
-if sd_buy and alertBull
-    alert("[ZONE] Demand Zone BUY @ " + str.tostring(close, format.mintick) +
-          " — " + syminfo.ticker + " " + timeframe.period, 
-          alert.freq_once_per_bar_close)
-
-if sd_sell and alertBear
-    alert("[ZONE] Supply Zone SELL @ " + str.tostring(close, format.mintick) +
-          " — " + syminfo.ticker + " " + timeframe.period, 
-          alert.freq_once_per_bar_close)
-```
-
-#### Configure TradingView Alert Dialog
-
-1. Open your chart with the indicator
-2. Click the "Alert" button
-3. Set the **Condition** to your alert condition (e.g., "Sweep BUY", "S&D Zone BUY", etc.)
-4. In the **Webhook URL** field, enter:
-   ```
-   https://YOUR_PUBLIC_URL/webhook
-   ```
-   Replace `YOUR_PUBLIC_URL` with your ngrok URL or server domain
-5. In the **Message** field, enter JSON format:
-   ```json
-   {"type": "{{strategy.order.action}}", "price": {{close}}, "symbol": "{{ticker}}", "timeframe": "{{interval}}", "message": "{{strategy.order.comment}}"}
-   ```
-   Or for custom alerts:
-   ```json
-   {"type": "BOS", "price": {{close}}, "symbol": "{{ticker}}", "timeframe": "{{interval}}"}
-   ```
-
-### 6. Testing
-
-1. Start the backend server
-2. Run the Flutter app on your device/emulator
-3. Verify the app shows "Connected" status
-4. Trigger a TradingView alert manually or wait for a signal
-5. You should receive a push notification on your device
-
-## API Endpoints
-
-### POST /webhook
-Receives TradingView webhook alerts.
-
-**Request Body:**
-```json
-{
-  "type": "BOS",
-  "price": 2345.50,
-  "symbol": "XAUUSD",
-  "timeframe": "1H",
-  "message": "Break of Structure detected"
-}
-```
-
-### POST /register-token
-Registers FCM token for push notifications.
-
-**Request Body:**
-```json
-{
-  "token": "device_fcm_token"
-}
-```
-
-### GET /alerts
-Returns alert history.
-
-### GET /health
-Health check endpoint.
-
-## Alert Types Supported
-
-- **BOS**: Break of Structure (bullish/bearish)
-- **SWEEP BUY/SELL**: Liquidity sweep signals
-- **S&D ZONE BUY/SELL**: Supply/Demand zone entries
-- **3RD TOUCH TRENDLINE BUY/SELL**: Trendline 3rd touch signals
+- `npm run dev` - Start all services (backend, web, flutter)
+- `npm run dev:backend` - Start backend only
+- `npm run dev:web` - Start web dashboard only
+- `npm run dev:flutter` - Start Flutter app
+- `npm run start` - Start production services
+- `npm run build:web` - Build web dashboard for production
+- `npm run install:all` - Install all dependencies
+- `npm run clean` - Clean all build artifacts
+- `npm run test` - Run all tests
+- `npm run lint` - Run linting for all services
 
 ## Project Structure
 
 ```
-trade-alert/
-├── backend/
-│   ├── server.js              # Express server
-│   ├── package.json           # Node.js dependencies
-│   └── .env                   # Environment variables
-├── flutter/
+trade-alert-next/
+├── backend/                   # Node.js backend server
+│   ├── server.js             # Express server
+│   ├── database.js           # Database configuration
+│   ├── package.json          # Node.js dependencies
+│   └── .env                  # Environment variables
+├── web-dashboard/            # Next.js web dashboard
+│   ├── src/
+│   │   ├── app/              # Next.js app directory
+│   │   │   ├── api/          # API routes
+│   │   │   ├── layout.tsx    # Root layout
+│   │   │   └── page.tsx      # Main page
+│   │   ├── components/       # React components
+│   │   │   ├── MTFDashboard.tsx
+│   │   │   ├── IndicatorState.tsx
+│   │   │   └── TradingDashboard.tsx
+│   │   ├── hooks/            # Custom React hooks
+│   │   │   ├── useMarketData.ts
+│   │   │   ├── useTrendAnalysis.ts
+│   │   │   └── useAlerts.ts
+│   │   ├── lib/              # Utility libraries
+│   │   │   ├── config.ts     # Configuration
+│   │   │   ├── api.ts        # API client
+│   │   │   ├── utils.ts      # Utility functions
+│   │   │   └── env-validation.ts
+│   │   └── types/            # TypeScript types
+│   │       └── index.ts
+│   ├── package.json          # Web dashboard dependencies
+│   └── .env.example          # Environment variables template
+├── flutter/                  # Flutter mobile app
 │   ├── lib/
-│   │   ├── main.dart          # App entry point
+│   │   ├── main.dart         # App entry point
 │   │   ├── models/
-│   │   │   └── alert.dart     # Alert data model
+│   │   │   └── alert.dart    # Alert data model
 │   │   ├── screens/
 │   │   │   ├── home_screen.dart
 │   │   │   ├── alert_history_screen.dart
@@ -216,9 +176,93 @@ trade-alert/
 │   │   └── app/
 │   │       ├── google-services.json
 │   │       └── build.gradle
-│   └── pubspec.yaml           # Flutter dependencies
-└── README.md
+│   └── pubspec.yaml          # Flutter dependencies
+├── package.json              # Root package.json with unified scripts
+└── README.md                 # This file
 ```
+
+## Web Dashboard Features
+
+- **Real-time Alert Feed**: Live updates of TradingView alerts with color-coded display
+- **MTF Trend Dashboard**: Multi-timeframe trend analysis with weighted bias calculation
+- **Indicator State Monitor**: Track order blocks, trendline touches, and signal readiness
+- **Market Data Integration**: Real-time market data with custom hooks
+- **Type-Safe API**: Centralized API client with error handling
+- **Environment Validation**: Type-safe environment variable configuration
+- **Responsive Design**: Dark-themed UI optimized for trading environments
+
+## API Endpoints
+
+### Backend Endpoints
+
+- `POST /webhook` - Receives TradingView webhook alerts
+- `POST /register-token` - Registers FCM token for push notifications
+- `GET /alerts` - Returns alert history
+- `GET /health` - Health check endpoint
+
+### Web Dashboard API Routes
+
+- `GET /api/health` - Backend health status
+- `GET /api/alerts` - Alert history from backend
+- `GET /api/market-data/[symbol]` - Market data for specified symbol
+- `POST /api/webhook` - TradingView webhook proxy
+
+## TradingView Integration
+
+### Alert Configuration
+
+In your Pine Script indicator, ensure you have the following alert conditions:
+
+```pine
+alertcondition(buySignal, title="BOS+OB Buy Signal", message="XAUUSD: Bullish OB retest confirmed")
+alertcondition(sellSignal, title="BOS+OB Sell Signal", message="XAUUSD: Bearish OB retest confirmed")
+alertcondition(tlBuy3rd, title="3rd Touch Trendline Buy", message="XAUUSD: 3rd touch support trendline BUY")
+alertcondition(tlSell3rd, title="3rd Touch Trendline Sell", message="XAUUSD: 3rd touch resistance trendline SELL")
+```
+
+### TradingView Alert Setup
+
+1. Open your chart with the indicator
+2. Click the "Alert" button
+3. Set condition to your desired alert
+4. Copy the webhook URL from the dashboard or use your public URL
+5. Paste in TradingView's Webhook URL field
+6. Use this JSON message format:
+```json
+{
+  "type": "{{strategy.order.action}}",
+  "price": "{{close}}",
+  "symbol": "{{ticker}}",
+  "timeframe": "{{interval}}",
+  "message": "{{strategy.order.comment}}"
+}
+```
+
+## Code Quality Improvements
+
+### TypeScript Configuration
+- **Strict mode enabled** for better type safety
+- **Additional compiler options** for code quality
+- **Centralized type definitions** in `src/types/index.ts`
+
+### Architecture Improvements
+- **Custom hooks** for data fetching (`useMarketData`, `useTrendAnalysis`, `useAlerts`)
+- **Centralized API client** with error handling and timeout management
+- **Shared utilities** in `lib/utils.ts` (market open check, EMA calculations, formatting)
+- **Environment validation** using Zod for type-safe configuration
+- **Configuration management** with centralized config object
+
+### Component Refactoring
+- **MTFDashboard**: Separated concerns, added loading/error states, uses custom hooks
+- **IndicatorState**: Removed code duplication, improved error handling, configurable parameters
+- **Loading states** and **error boundaries** for better UX
+
+### Best Practices
+- **No `any` types** - all data properly typed
+- **Error handling** with custom `ApiError` class
+- **Consistent naming** and code organization
+- **Reusable components** and utilities
+- **Environment-based configuration**
 
 ## Troubleshooting
 
@@ -238,12 +282,19 @@ trade-alert/
 - Check TradingView alert is enabled and condition is met
 - Review TradingView alert log for errors
 
+### Web dashboard not loading
+- Ensure backend server is running
+- Check `BACKEND_URL` in `.env.local`
+- Verify API endpoints are accessible
+- Check browser console for errors
+
 ## Security Notes
 
 - In production, use HTTPS for the backend server
 - Store Firebase credentials securely (use environment variables)
 - Implement authentication for the webhook endpoint
 - Consider rate limiting to prevent abuse
+- Never commit `.env` files to version control
 
 ## License
 

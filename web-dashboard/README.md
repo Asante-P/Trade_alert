@@ -1,6 +1,6 @@
 # Trade Alert Web Dashboard
 
-A Next.js web dashboard for monitoring TradingView indicator alerts, specifically designed for the BOS + OB Retest Trend indicator.
+A modern Next.js web dashboard for monitoring TradingView indicator alerts, specifically designed for the BOS + OB Retest Trend indicator. Built with TypeScript, strict type safety, and best practices.
 
 ## Features
 
@@ -9,14 +9,20 @@ A Next.js web dashboard for monitoring TradingView indicator alerts, specificall
 - **Indicator State Monitor**: Track order blocks, trendline touches, and signal readiness
 - **Webhook Configuration**: Easy setup for TradingView webhook integration
 - **Health Monitoring**: Backend connection status and system health checks
+- **Type-Safe Architecture**: Full TypeScript strict mode with comprehensive type definitions
+- **Custom Hooks**: Reusable data fetching hooks with loading/error states
+- **Centralized API**: Type-safe API client with error handling
+- **Environment Validation**: Zod-based environment variable validation
 - **Responsive Design**: Dark-themed UI optimized for trading environments
 
 ## Architecture
 
-- **Frontend**: Next.js 15 with TypeScript and Tailwind CSS
-- **Backend Integration**: Connects to existing Node.js backend
-- **Real-time Updates**: Polling-based alerts and health monitoring
-- **API Proxy**: Next.js API routes proxy requests to backend server
+- **Frontend**: Next.js 16 with TypeScript strict mode and Tailwind CSS
+- **State Management**: Custom React hooks for data fetching and state management
+- **API Layer**: Centralized API client with timeout and error handling
+- **Type Safety**: Comprehensive TypeScript types with strict mode enabled
+- **Configuration**: Centralized config with environment validation
+- **Backend Integration**: Connects to existing Node.js backend via API proxy
 
 ## Setup Instructions
 
@@ -29,11 +35,19 @@ npm install
 
 ### 2. Environment Configuration
 
-Create a `.env.local` file in the web-dashboard directory:
+Copy the example environment file and configure:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` with your configuration:
 
 ```env
 NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
 BACKEND_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 3. Start the Development Server
@@ -73,33 +87,81 @@ web-dashboard/
 │   │   ├── AlertFeed.tsx               # Alert feed component
 │   │   ├── WebhookConfig.tsx            # Webhook configuration panel
 │   │   └── TradingDashboard.tsx         # Main dashboard layout
+│   ├── hooks/
+│   │   ├── useMarketData.ts            # Market data fetching hook
+│   │   ├── useTrendAnalysis.ts         # Trend analysis hook
+│   │   ├── useAlerts.ts                # Alerts fetching hook
+│   │   └── index.ts                    # Hook exports
 │   ├── lib/
-│   │   └── config.ts                   # Configuration constants
+│   │   ├── config.ts                   # Configuration constants
+│   │   ├── api.ts                      # Centralized API client
+│   │   ├── utils.ts                    # Shared utility functions
+│   │   ├── env-validation.ts           # Environment validation with Zod
+│   │   └── supabase.ts                 # Supabase client configuration
 │   └── types/
 │       └── index.ts                    # TypeScript type definitions
 ├── public/                             # Static assets
 ├── package.json                        # Dependencies
+├── tsconfig.json                       # TypeScript configuration (strict mode)
+├── .env.example                        # Environment variables template
 └── README.md                           # This file
 ```
+
+## Key Improvements
+
+### Code Quality
+- **TypeScript Strict Mode**: Enabled with additional compiler options for better type safety
+- **No `any` Types**: All data properly typed with comprehensive interfaces
+- **Error Handling**: Custom `ApiError` class and proper error boundaries
+- **Code Organization**: Clear separation of concerns with dedicated directories
+
+### Architecture
+- **Custom Hooks**: Reusable data fetching hooks (`useMarketData`, `useTrendAnalysis`, `useAlerts`)
+- **Centralized API**: Single API client with timeout, error handling, and type safety
+- **Shared Utilities**: Common functions in `lib/utils.ts` (market open check, EMA calculations, formatting)
+- **Environment Validation**: Zod-based validation for type-safe environment variables
+- **Configuration Management**: Centralized config object with all application settings
+
+### Component Improvements
+- **MTFDashboard**: 
+  - Separated business logic from UI
+  - Added loading and error states
+  - Uses custom hooks for data fetching
+  - Configurable timeframes and weights
+- **IndicatorState**:
+  - Removed code duplication
+  - Improved error handling
+  - Configurable refresh intervals
+  - Better loading states
+
+### Development Experience
+- **Type Safety**: Full TypeScript coverage with strict mode
+- **IntelliSense**: Better autocomplete and type hints
+- **Error Prevention**: Compile-time error catching
+- **Maintainability**: Clear code structure and documentation
 
 ## Component Descriptions
 
 ### MTFDashboard
 - Displays trend bias across multiple timeframes (15m, 1H, 4H, 1D)
-- Calculates weighted overall bias
-- Auto-updates every 10 seconds with simulated data
+- Calculates weighted overall bias using configurable threshold
+- Uses custom hooks for data fetching and trend analysis
+- Auto-updates with configurable refresh interval
+- Includes loading and error states for better UX
 
 ### IndicatorState
 - Shows active bullish/bearish order blocks
 - Tracks resistance/support trendline touches
 - Displays signal readiness status
 - Reset functionality for touch counters
+- Configurable parameters via props and config
 
 ### AlertFeed
 - Real-time display of TradingView alerts
 - Color-coded by alert type (buy/sell/BOS/zone/touch)
 - Shows timestamp, symbol, price, and timeframe
-- Auto-refreshes every 15 seconds
+- Auto-refreshes with configurable interval
+- Uses custom `useAlerts` hook
 
 ### WebhookConfig
 - Provides webhook URL for TradingView configuration
@@ -116,10 +178,48 @@ Returns alert history from backend server.
 Returns backend health status and system metrics.
 
 ### GET /api/market-data/[symbol]
-Fetches market data for specified symbol.
+Fetches market data for specified symbol with interval and limit parameters.
 
 ### POST /api/webhook
 Receives TradingView webhook alerts and forwards to backend.
+
+## Configuration
+
+The dashboard uses a centralized configuration system in `src/lib/config.ts`:
+
+```typescript
+export const config = {
+  backendUrl: string,
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  symbols: string[],
+  refreshInterval: number,
+  maxAlerts: number,
+  apiTimeout: number,
+  appName: string,
+  appVersion: string,
+  features: {
+    marketData: boolean,
+    mtfAnalysis: boolean,
+    aiAnalyzer: boolean,
+  },
+  mtf: {
+    defaultTimeframes: string[],
+    defaultWeights: number[],
+    refreshInterval: number,
+    biasThreshold: number,
+  },
+  indicator: {
+    refreshInterval: number,
+    defaultTouchesRequired: number,
+    maxTouches: number,
+  },
+  marketData: {
+    defaultLimit: number,
+    intervals: Record<string, string>,
+  },
+};
+```
 
 ## TradingView Integration
 
@@ -152,6 +252,57 @@ alertcondition(tlSell3rd, title="3rd Touch Trendline Sell", message="XAUUSD: 3rd
 }
 ```
 
+## Development
+
+### Available Scripts
+
+- `npm run dev` - Start development server on port 3001
+- `npm run build` - Build for production
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
+
+### Adding New Features
+
+1. Create new components in `src/components/`
+2. Add custom hooks in `src/hooks/`
+3. Add API routes in `src/app/api/`
+4. Update types in `src/types/index.ts`
+5. Modify configuration in `src/lib/config.ts`
+6. Add utilities in `src/lib/utils.ts`
+
+### Type Safety Guidelines
+
+- Always define proper TypeScript interfaces for data structures
+- Avoid using `any` types - use proper interfaces or `unknown`
+- Use the centralized API client for all backend communication
+- Validate environment variables using the Zod schema
+- Follow the existing patterns for custom hooks
+
+## Troubleshooting
+
+### Dashboard Not Loading
+- Ensure backend server is running
+- Check `BACKEND_URL` in `.env.local`
+- Verify API endpoints are accessible
+- Check browser console for TypeScript errors
+
+### Type Errors
+- Ensure all dependencies are installed
+- Check that `tsconfig.json` has strict mode enabled
+- Verify all interfaces are properly defined
+- Run `npm run build` to catch compilation errors
+
+### Alerts Not Updating
+- Check browser console for errors
+- Verify backend `/alerts` endpoint
+- Ensure polling interval is working
+- Check that custom hooks are properly configured
+
+### Webhook Not Receiving Alerts
+- Verify TradingView webhook URL is correct
+- Check backend server logs
+- Ensure webhook URL is publicly accessible
+
 ## Deployment
 
 ### Vercel (Recommended)
@@ -161,6 +312,8 @@ alertcondition(tlSell3rd, title="3rd Touch Trendline Sell", message="XAUUSD: 3rd
 3. Set environment variables:
    - `NEXT_PUBLIC_BACKEND_URL`: Your backend server URL
    - `BACKEND_URL`: Your backend server URL
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anon key
 4. Deploy
 
 ### Other Platforms
@@ -171,39 +324,6 @@ The dashboard can be deployed to any platform that supports Next.js:
 - AWS Amplify
 - DigitalOcean App Platform
 
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint
-
-### Adding New Features
-
-1. Create new components in `src/components/`
-2. Add API routes in `src/app/api/`
-3. Update types in `src/types/index.ts`
-4. Modify configuration in `src/lib/config.ts`
-
-## Troubleshooting
-
-### Dashboard Not Loading
-- Ensure backend server is running
-- Check `BACKEND_URL` in `.env.local`
-- Verify API endpoints are accessible
-
-### Alerts Not Updating
-- Check browser console for errors
-- Verify backend `/alerts` endpoint
-- Ensure polling interval is working
-
-### Webhook Not Receiving Alerts
-- Verify TradingView webhook URL is correct
-- Check backend server logs
-- Ensure webhook URL is publicly accessible
-
 ## Future Enhancements
 
 - WebSocket integration for real-time updates
@@ -213,6 +333,8 @@ The dashboard can be deployed to any platform that supports Next.js:
 - Alert filtering and search functionality
 - Export alert history to CSV
 - Mobile app companion
+- Unit and integration tests
+- Storybook for component documentation
 
 ## License
 
