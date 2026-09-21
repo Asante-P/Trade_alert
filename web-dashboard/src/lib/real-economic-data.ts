@@ -1,5 +1,5 @@
 // Real Economic Data Integration
-// Implementation for Trading Economics and FRED APIs
+// Implementation for Finance Calendar API (free, no API key required)
 
 export interface EconomicIndicator {
   name: string;
@@ -12,6 +12,7 @@ export interface EconomicIndicator {
 }
 
 export class RealEconomicDataService {
+  private financeCalendarUrl = 'https://www.financecalendar.com/wp-json/fc/v1';
   private tradingEconomicsKey: string;
   private fredKey: string;
 
@@ -20,11 +21,72 @@ export class RealEconomicDataService {
     this.fredKey = process.env.FRED_API_KEY || '';
   }
 
-  // Fetch data from Trading Economics API
+  // Fetch data from Finance Calendar API (Free, no API key required)
+  async fetchFinanceCalendarData(fromDate?: string, toDate?: string): Promise<EconomicIndicator[]> {
+    try {
+      const params = new URLSearchParams();
+      
+      if (fromDate) params.append('from', fromDate);
+      if (toDate) params.append('to', toDate);
+      params.append('impact', 'high'); // Get high-impact events
+      params.append('limit', '50');
+
+      const response = await fetch(
+        `${this.financeCalendarUrl}/calendar?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Finance Calendar API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return this.transformFinanceCalendarData(data);
+    } catch (error) {
+      console.error('Error fetching Finance Calendar data:', error);
+      return this.getFallbackData();
+    }
+  }
+
+  // Fetch today's events from Finance Calendar
+  async fetchTodayFinanceCalendar(): Promise<any> {
+    try {
+      const response = await fetch(`${this.financeCalendarUrl}/today`);
+
+      if (!response.ok) {
+        throw new Error(`Finance Calendar Today API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching today\'s calendar:', error);
+      return { market: 'unknown', events: [] };
+    }
+  }
+
+  // Fetch next occurrence of a specific series
+  async fetchNextOccurrence(series: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.financeCalendarUrl}/next?series=${series}`);
+
+      if (!response.ok) {
+        throw new Error(`Finance Calendar Next API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching next occurrence:', error);
+      return null;
+    }
+  }
+
+  // Fetch data from Trading Economics API (if API key is configured)
   async fetchTradingEconomicsData(country: string = 'united states'): Promise<EconomicIndicator[]> {
     if (!this.tradingEconomicsKey) {
-      console.warn('Trading Economics API key not configured');
-      return this.getFallbackData();
+      console.warn('Trading Economics API key not configured, using Finance Calendar');
+      return this.fetchFinanceCalendarData();
     }
 
     try {
@@ -40,8 +102,8 @@ export class RealEconomicDataService {
       
       return this.transformTradingEconomicsData(data);
     } catch (error) {
-      console.error('Error fetching Trading Economics data:', error);
-      return this.getFallbackData();
+      console.error('Error fetching Trading Economics data, falling back to Finance Calendar:', error);
+      return this.fetchFinanceCalendarData();
     }
   }
 
@@ -70,19 +132,22 @@ export class RealEconomicDataService {
     }
   }
 
-  // Fetch economic calendar from Trading Economics
+  // Fetch economic calendar from Finance Calendar (preferred method)
   async fetchEconomicCalendar(): Promise<any[]> {
-    if (!this.tradingEconomicsKey) {
-      return this.getFallbackCalendar();
-    }
-
     try {
+      // Get events for next 30 days
+      const today = new Date();
+      const nextMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      
+      const fromDate = today.toISOString().split('T')[0];
+      const toDate = nextMonth.toISOString().split('T')[0];
+
       const response = await fetch(
-        `https://api.tradingeconomics.com/calendar?apikey=${this.tradingEconomicsKey}`
+        `${this.financeCalendarUrl}/calendar?from=${fromDate}&to=${toDate}&impact=high&limit=100`
       );
 
       if (!response.ok) {
-        throw new Error(`Trading Economics Calendar API error: ${response.status}`);
+        throw new Error(`Finance Calendar API error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -91,6 +156,46 @@ export class RealEconomicDataService {
       console.error('Error fetching economic calendar:', error);
       return this.getFallbackCalendar();
     }
+  }
+
+  // Transform Finance Calendar data to our format
+  private transformFinanceCalendarData(data: any[]): EconomicIndicator[] {
+    if (!Array.isArray(data)) return [];
+
+    return data.map(item => ({
+      name: item.name || item.title,
+      value: item.actual ? parseFloat(item.actual) : 0,
+      previous: item.prior ? parseFloat(item.prior) : 0,
+      forecast: item.consensus ? parseFloat(item.consensus) : 0,
+      timestamp: new Date(item.date || item.time_utc),
+      currency: this.extractCurrency(item.name || item.title),
+      impact: (item.impact || 'medium').toLowerCase() as 'high' | 'medium' | 'low'
+    }));
+  }
+
+  // Extract currency from event name
+  private extractCurrency(eventName: string): string {
+    const currencyMap: { [key: string]: string } = {
+      'US': 'USD',
+      'United States': 'USD',
+      'UK': 'GBP',
+      'United Kingdom': 'GBP',
+      'Euro': 'EUR',
+      'European': 'EUR',
+      'Japan': 'JPY',
+      'China': 'CNY',
+      'Canada': 'CAD',
+      'Australia': 'AUD',
+      'Switzerland': 'CHF'
+    };
+
+    for (const [key, currency] of Object.entries(currencyMap)) {
+      if (eventName.toLowerCase().includes(key.toLowerCase())) {
+        return currency;
+      }
+    }
+
+    return 'USD'; // Default
   }
 
   // Transform Trading Economics data to our format
@@ -195,7 +300,7 @@ export class RealEconomicDataService {
     lastUpdated: Date;
   }> {
     const [indicators, calendar] = await Promise.all([
-      this.fetchTradingEconomicsData(),
+      this.fetchFinanceCalendarData(),
       this.fetchEconomicCalendar()
     ]);
 

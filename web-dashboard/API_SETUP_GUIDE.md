@@ -4,7 +4,42 @@ This guide walks you through setting up all the external APIs and services neede
 
 ## 1. Economic Data API Setup
 
-### Trading Economics API
+### Finance Calendar API (Recommended - Free!)
+
+**Why Finance Calendar API?**
+- ✅ **Completely Free** - No API key required
+- ✅ **No Rate Limits** - Only cached for 5 minutes
+- ✅ **CORS Enabled** - Can be called from browser
+- ✅ **Real-time Data** - Updated within the hour of releases
+- ✅ **Verified Times** - Times verified against official sources
+- ✅ **JSON Format** - Easy to integrate
+
+**No Setup Required!**
+The system uses Finance Calendar API by default. You don't need to configure anything.
+
+**Test the API:**
+```bash
+# Get today's events
+curl "https://www.financecalendar.com/wp-json/fc/v1/today"
+
+# Get next FOMC meeting
+curl "https://www.financecalendar.com/wp-json/fc/v1/next?series=fomc"
+
+# Get high-impact events for next 30 days
+curl "https://www.financecalendar.com/wp-json/fc/v1/calendar?impact=high"
+```
+
+**API Endpoints Available:**
+- `/today` - Today's events + market status
+- `/next?series=X` - Next occurrence of a series (fomc, cpi, jobs, etc.)
+- `/calendar` - Events in date range
+- `/holidays` - Market holidays
+
+**Cost:** $0/month forever
+
+---
+
+### Trading Economics API (Optional)
 
 **Steps to get API key:**
 1. Go to [https://tradingeconomics.com/](https://tradingeconomics.com/)
@@ -297,6 +332,7 @@ Ensure Twilio credentials are correct by checking your Twilio dashboard.
 
 | Service | Free Tier | Monthly Cost |
 |----------|-----------|--------------|
+| Finance Calendar API | Unlimited | Free |
 | Trading Economics | 500 requests | $20 for more |
 | FRED API | 120 req/min | Free |
 | Binance WebSocket | Unlimited | Free |
@@ -307,10 +343,10 @@ Ensure Twilio credentials are correct by checking your Twilio dashboard.
 
 ### Estimated Monthly Costs for Active Trading:
 
-- **Economic Data**: $20-50/month
+- **Economic Data**: $0-50/month (Finance Calendar is free, Trading Economics optional)
 - **SMS Notifications**: $10-30/month (depending on volume)
 - **Email Notifications**: Free (Gmail) or $10-20/month (SendGrid)
-- **Total**: $40-100/month for comprehensive setup
+- **Total**: $10-100/month for comprehensive setup
 
 ## 8. Troubleshooting
 
